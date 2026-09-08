@@ -1,0 +1,18 @@
+# core data handling and modelling (named in the assignment spec)
+pandas
+numpy
+scikit-learn
+matplotlib
+ 
+# sentence segmentation
+nltk
+ 
+# parquet cache for the sentence table
+pyarrow
+ 
+# beyond-unit model 1: gradient boosting on the feature table
+lightgbm
+ 
+# beyond-unit model 2: perplexity features from a small local language model
+torch
+transformers
