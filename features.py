@@ -7,6 +7,8 @@ import re
 from collections import Counter
 import numpy as np
 
+from sentence_splitter import split_sentences
+
 TRANSITION_WORDS = {
     "additionally", "moreover", "furthermore", "however", "therefore",
     "consequently", "overall", "in conclusion", "in summary", "ultimately",
@@ -38,11 +40,6 @@ DOCUMENT_FEATURE_NAMES = [
     "flesch_reading_ease",
 ]
 
-
-def split_sentences(text: str):
-    text = str(text).strip()
-    raw = re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"\'])', text)
-    return [s.strip() for s in raw if s.strip()]
 
 
 def _words(text: str):
