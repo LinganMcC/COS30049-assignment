@@ -1,0 +1,17 @@
+# Large raw datasets
+data/raw/*.csv
+data/raw/*.jsonl
+
+# Generated processed datasets
+data/processed/*.csv
+
+# Generated sentence-level datasets
+data/sentences/*.csv
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
