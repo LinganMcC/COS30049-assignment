@@ -1,17 +1,51 @@
-# Large raw datasets
-data/raw/*.csv
-data/raw/*.jsonl
+# ============================================================
+# DATASETS AND GENERATED DATA
+# ============================================================
+# Keep all raw datasets and generated outputs local.
+# The .gitkeep exceptions allow empty folder structure to remain in Git.
 
-# Generated processed datasets
-data/processed/*.csv
+data/raw/*
+!data/raw/.gitkeep
 
-# Generated sentence-level datasets
-data/sentences/*.csv
+data/processed/*
+!data/processed/.gitkeep
 
-# Python cache
+data/sentences/*
+!data/sentences/.gitkeep
+
+
+# ============================================================
+# PYTHON CACHE / BUILD FILES
+# ============================================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+build/
+dist/
+*.egg-info/
 
-# Virtual environments
+
+# ============================================================
+# VIRTUAL ENVIRONMENTS
+# ============================================================
 .venv/
 venv/
+env/
+ENV/
+
+
+# ============================================================
+# TEST / TOOL CACHES
+# ============================================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+# ============================================================
+# EDITOR / OS FILES
+# ============================================================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
