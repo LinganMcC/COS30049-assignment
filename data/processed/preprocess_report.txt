@@ -5,9 +5,10 @@ Mapping: text->text, label->label, prompt_name->group_key, source->generator for
 domain is set to 'student_essay'; human generator is set to 'human'.
 
 === DRCAT CLEANING ===
-{'before': 44868, 'after': 44868, 'dropped_length_or_empty': 0}
-{'dataset': 'DRCAT', 'conflicting_duplicate_rows_removed': 0, 'same_label_duplicate_rows_removed': 4}
-After preprocessing: rows=44,864, AI=17,497, human=27,367, pct_ai=0.3900, groups=15
+Minimal text cleaning applied.
+Document-length filtering: NOT applied.
+Same-label duplicate rows removed: 4
+After preprocessing: rows=44,864, AI=17,497, human=27,367, AI%=39.00%, groups=15
 
 === HC3 RAW -> COMMON SCHEMA ===
 Raw question rows: 24,322
@@ -19,25 +20,28 @@ All answers to the same question receive the same group_key.
 source->domain; generator becomes 'human' or 'chatgpt'.
 
 === HC3 CLEANING ===
-{'before': 85449, 'after': 85380, 'dropped_length_or_empty': 69}
-{'dataset': 'HC3', 'conflicting_duplicate_rows_removed': 0, 'same_label_duplicate_rows_removed': 6090}
-HC3 rows removed because exact text also existed in DRCAT: 0
-After preprocessing: rows=79,290, AI=26,242, human=53,048, pct_ai=0.3310, groups=23,492
+Minimal text cleaning applied.
+Document-length filter: 30 to 20,000 characters
+Rows before length filtering: 85,449
+Rows after length filtering: 85,380
+Rows dropped because of document length/empty text: 69
+Same-label duplicate rows removed: 6,090
+After preprocessing: rows=79,290, AI=26,242, human=53,048, AI%=33.10%, groups=23,492
 
 === UNIFIED DOCUMENT FILE ===
 Saved: data\processed\unified_documents.csv
 Unified rows: 124,154
 Purpose: audit / analysis / visualisation. Do NOT randomly train/test split this whole file.
-DRCAT remains the development dataset; HC3 remains external unseen evaluation.
+DRCAT remains the development dataset; HC3 remains external evaluation.
 
 === DRCAT PROMPT-GROUP SPLIT ===
-Train: rows=31,119, AI=12,251, human=18,868, pct_ai=0.3937, groups=11
-Validation: rows=7,133, AI=2,671, human=4,462, pct_ai=0.3745, groups=2
-Test: rows=6,612, AI=2,575, human=4,037, pct_ai=0.3894, groups=2
+Train: rows=31,119, AI=12,251, human=18,868, AI%=39.37%, groups=11
+Validation: rows=7,133, AI=2,671, human=4,462, AI%=37.45%, groups=2
+Test: rows=6,612, AI=2,575, human=4,037, AI%=38.94%, groups=2
 Leakage rule: the same DRCAT prompt/group_key never appears in more than one split.
 
 === HC3 EXTERNAL UNSEEN TEST ===
-External test: rows=2,000, AI=1,000, human=1,000, pct_ai=0.5000, groups=1,000
+External test: rows=2,000, AI=1,000, human=1,000, AI%=50.00%, groups=1,000
 Requested question groups: 1000
 Sampling rule: one human answer + one ChatGPT answer per selected question.
-HC3 is not used to tune features/model if you want it to remain a true external test.
+HC3 is not used for model training or hyperparameter tuning if it is being kept as a true external test.
