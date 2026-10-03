@@ -1,18 +1,3 @@
-"""Sentence splitting for the processed DRCAT + HC3 document files.
-
-IMPORTANT PROJECT RULE:
-Document-level train/validation/test splitting happens BEFORE sentence splitting.
-That prevents sentences from the same document/prompt leaking across partitions.
-
-Tutor-approved repair:
-Before spaCy segmentation we identify missing whitespace after sentence-ending
-punctuation and repair patterns such as:
-    Hello.World   -> Hello. World
-    Hello .World  -> Hello. World
-This targeted repair is kept intentionally because it helps spaCy recognise the
-intended sentence boundary.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -21,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 import spacy
-
 
 REQUIRED_DOCUMENT_COLUMNS = {
     "document_id",
@@ -32,6 +16,8 @@ REQUIRED_DOCUMENT_COLUMNS = {
     "domain",
     "generator",
 }
+
+ALPHABETIC_RE = re.compile(r"[A-Za-z]")
 
 
 def load_spacy_model():
@@ -44,8 +30,7 @@ def load_spacy_model():
         raise SystemExit(
             "spaCy model 'en_core_web_sm' is not installed.\n"
             "Run:\n"
-            "    python -m spacy download en_core_web_sm\n"
-            "Then run this script again."
+            "    python -m spacy download en_core_web_sm"
         ) from exc
 
 
@@ -53,57 +38,63 @@ NLP = load_spacy_model()
 
 
 def normalize_text(text: str) -> str:
-    """Repair targeted punctuation-spacing errors before spaCy splitting.
-
-    Tutor-discussed examples:
-        "Hello.World"  -> "Hello. World"
-        "Hello .World" -> "Hello. World"
-
-    We do NOT lowercase, remove punctuation, remove stopwords, stem, or
-    lemmatise. This function exists only to make intended boundaries easier
-    for spaCy to identify.
-    """
+    """Repair targeted missing whitespace after sentence-ending punctuation."""
     return re.sub(
         r"(?<=[a-z])\s*([.!?])(?=[A-Z])",
         r"\1 ",
-        text,
+        str(text),
     )
 
 
-def split_sentences(text: str) -> list[str]:
-    """Return spaCy sentence strings after the targeted spacing repair."""
-    if text is None:
-        return []
-
-    text = str(text).strip()
-    if not text:
-        return []
-
-    text = normalize_text(text)
-    doc = NLP(text)
-
-    return [
-        sentence.text.strip()
-        for sentence in doc.sents
-        if sentence.text.strip()
-    ]
-
-
-def documents_to_sentences(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert a processed document dataframe into a sentence dataframe.
-
-    Sentence labels are inherited from document labels. They are therefore
-    weak/document-inherited labels, not independently annotated sentence-level
-    ground truth.
+def is_usable_sentence(text: str) -> bool:
     """
+    Keep a sentence only if it contains at least one alphabetic character.
+
+    Examples removed:
+        2013.
+        163)
+        <
+        🌎
+        💰🚀
+    """
+    text = str(text).strip()
+    return bool(text and ALPHABETIC_RE.search(text))
+
+
+def split_sentences(text: str, *, return_removed: bool = False):
+    if text is None or not str(text).strip():
+        return ([], []) if return_removed else []
+
+    doc = NLP(normalize_text(str(text).strip()))
+    kept = []
+    removed = []
+
+    for span in doc.sents:
+        sentence = span.text.strip()
+        if not sentence:
+            continue
+
+        if is_usable_sentence(sentence):
+            kept.append(sentence)
+        else:
+            removed.append(sentence)
+
+    return (kept, removed) if return_removed else kept
+
+
+def documents_to_sentences(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     missing = REQUIRED_DOCUMENT_COLUMNS - set(df.columns)
     if missing:
         raise ValueError(f"Input file is missing columns: {sorted(missing)}")
 
-    rows: list[dict] = []
+    rows = []
+    removed_rows = []
 
     for _, row in df.iterrows():
-        sentences = split_sentences(row["text"])
+        sentences, removed = split_sentences(
+            row["text"],
+            return_removed=True,
+        )
 
         for sentence_index, sentence in enumerate(sentences):
             rows.append(
@@ -121,7 +112,21 @@ def documents_to_sentences(df: pd.DataFrame) -> pd.DataFrame:
                 }
             )
 
-    return pd.DataFrame(rows)
+        for fragment in removed:
+            removed_rows.append(
+                {
+                    "document_id": row["document_id"],
+                    "fragment_text": fragment,
+                    "label": int(row["label"]),
+                    "source_dataset": row["source_dataset"],
+                    "group_key": row["group_key"],
+                    "domain": row["domain"],
+                    "generator": row["generator"],
+                    "removal_reason": "no_alphabetic_character",
+                }
+            )
+
+    return pd.DataFrame(rows), pd.DataFrame(removed_rows)
 
 
 def split_file(input_path: str | Path, output_path: str | Path) -> None:
@@ -130,13 +135,21 @@ def split_file(input_path: str | Path, output_path: str | Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     documents = pd.read_csv(input_path)
-    sentences = documents_to_sentences(documents)
+    sentences, removed = documents_to_sentences(documents)
+
     sentences.to_csv(output_path, index=False)
 
+    removed_path = output_path.parent / f"{output_path.stem}_removed_fragments.csv"
+    removed.to_csv(removed_path, index=False)
+
     print(
-        f"{input_path.name}: {len(documents):,} documents -> "
-        f"{len(sentences):,} sentences -> {output_path}"
+        f"{input_path.name}: "
+        f"{len(documents):,} documents -> "
+        f"{len(sentences):,} usable sentences -> "
+        f"{len(removed):,} removed non-lexical fragments"
     )
+    print(f"  sentences -> {output_path}")
+    print(f"  audit     -> {removed_path}")
 
 
 def split_processed_directory(
@@ -147,14 +160,14 @@ def split_processed_directory(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    files = [
+    filenames = [
         "drcat_train.csv",
         "drcat_validation.csv",
         "drcat_test.csv",
         "hc3_external_test.csv",
     ]
 
-    for filename in files:
+    for filename in filenames:
         source = processed_dir / filename
         if not source.exists():
             print(f"Skipping missing file: {source}")
@@ -165,17 +178,28 @@ def split_processed_directory(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Split processed documents with spaCy")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Split processed documents with spaCy and filter non-lexical fragments."
+        )
+    )
 
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--input", help="One processed document CSV")
     mode.add_argument(
         "--processed-dir",
-        help="Directory containing drcat_train/validation/test and hc3_external_test",
+        help="Directory containing processed split CSV files",
     )
 
-    parser.add_argument("--output", help="Output CSV when using --input")
-    parser.add_argument("--out-dir", default="data/sentences")
+    parser.add_argument(
+        "--output",
+        help="Output CSV when using --input",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default="data/sentences",
+    )
+
     args = parser.parse_args()
 
     if args.input:

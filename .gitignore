@@ -49,3 +49,73 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+
+
+# =========================
+# DATA
+# =========================
+
+# Raw downloaded datasets
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+
+# Preprocessed/generated datasets
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+
+# Sentence-split datasets
+data/sentences/*
+!data/sentences/.gitkeep
+!data/sentences/README.md
+
+# Generated feature tables
+data/features/*
+!data/features/.gitkeep
+!data/features/README.md
+
+
+# =========================
+# EXPERIMENT OUTPUTS
+# =========================
+
+# Large/generated experiment outputs
+results/feature_analysis/**/*.csv
+
+# Keep report-ready figures/tables separately
+!results/report/
+!results/report/**
+
+
+# =========================
+# PYTHON
+# =========================
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+
+
+# =========================
+# MODELS / CACHE
+# =========================
+
+*.pkl
+*.joblib
+*.pt
+*.pth
+
+.cache/
+
+
+# Generated exploratory figures
+results/feature_analysis/train/**/*.png
+results/feature_analysis/train/**/*.jpg
+results/feature_analysis/train/**/*.jpeg
+results/feature_analysis/train/**/*.svg
+
+
+data/features/.checkpoints/
