@@ -1,59 +1,6 @@
 # ============================================================
 # DATASETS AND GENERATED DATA
 # ============================================================
-# Keep all raw datasets and generated outputs local.
-# The .gitkeep exceptions allow empty folder structure to remain in Git.
-
-data/raw/*
-!data/raw/.gitkeep
-
-data/processed/*
-!data/processed/.gitkeep
-
-data/sentences/*
-!data/sentences/.gitkeep
-
-
-# ============================================================
-# PYTHON CACHE / BUILD FILES
-# ============================================================
-__pycache__/
-*.py[cod]
-*$py.class
-build/
-dist/
-*.egg-info/
-
-
-# ============================================================
-# VIRTUAL ENVIRONMENTS
-# ============================================================
-.venv/
-venv/
-env/
-ENV/
-
-
-# ============================================================
-# TEST / TOOL CACHES
-# ============================================================
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-
-# ============================================================
-# EDITOR / OS FILES
-# ============================================================
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
-
-
-# =========================
-# DATA
-# =========================
 
 # Raw downloaded datasets
 data/raw/*
@@ -75,33 +22,39 @@ data/features/*
 !data/features/.gitkeep
 !data/features/README.md
 
+# Feature extraction checkpoints
+data/features/.checkpoints/
 
-# =========================
+
+# ============================================================
+# LOGISTIC REGRESSION OUTPUTS
+# ============================================================
+
+# All generated Logistic Regression results stay local
+logistic_regression/outputs/
+
+
+# ============================================================
 # EXPERIMENT OUTPUTS
-# =========================
+# ============================================================
 
-# Large/generated experiment outputs
+# Generated feature-analysis CSV files
 results/feature_analysis/**/*.csv
 
-# Keep report-ready figures/tables separately
+# Generated exploratory figures
+results/feature_analysis/train/**/*.png
+results/feature_analysis/train/**/*.jpg
+results/feature_analysis/train/**/*.jpeg
+results/feature_analysis/train/**/*.svg
+
+# Keep report-ready material if you intentionally place it here
 !results/report/
 !results/report/**
 
 
-# =========================
-# PYTHON
-# =========================
-
-__pycache__/
-*.py[cod]
-
-.venv/
-venv/
-
-
-# =========================
-# MODELS / CACHE
-# =========================
+# ============================================================
+# SAVED MODELS
+# ============================================================
 
 *.pkl
 *.joblib
@@ -111,11 +64,43 @@ venv/
 .cache/
 
 
-# Generated exploratory figures
-results/feature_analysis/train/**/*.png
-results/feature_analysis/train/**/*.jpg
-results/feature_analysis/train/**/*.jpeg
-results/feature_analysis/train/**/*.svg
+# ============================================================
+# PYTHON CACHE / BUILD FILES
+# ============================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+build/
+dist/
+*.egg-info/
 
 
-data/features/.checkpoints/
+# ============================================================
+# VIRTUAL ENVIRONMENTS
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+
+
+# ============================================================
+# TEST / TOOL CACHES
+# ============================================================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+
+# ============================================================
+# EDITOR / OS FILES
+# ============================================================
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
