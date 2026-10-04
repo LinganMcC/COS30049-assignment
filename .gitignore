@@ -19,6 +19,7 @@ data/sentences/*
 
 # Generated feature tables
 data/features/*
+data/features/.csv
 !data/features/.gitkeep
 !data/features/README.md
 
