@@ -171,7 +171,6 @@ def build_balanced_hc3_external_test(
             Question B -> 1 human + 1 AI
     """
     # Only use questions that still contain at least one human and one AI answer
-    # after cleaning/deduplication/overlap removal.
     label_variety = hc3.groupby("group_key")["label"].nunique()
     eligible_groups = label_variety[label_variety >= 2].index.to_numpy()
 

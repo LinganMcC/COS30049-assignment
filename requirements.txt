@@ -1,18 +1,28 @@
-# core data handling and modelling (named in the assignment spec)
+# COS30049 AI-Generated Content Detection
+# Dependencies required for the current reproducible pipeline:
+# preprocessing -> sentence splitting -> feature extraction -> Logistic Regression.
+#
+# Install with:
+#   python -m pip install -r requirements.txt
+#
+# spaCy's English model is installed separately:
+#   python -m spacy download en_core_web_sm
+
+# Data handling
 pandas
 numpy
+
+# Machine learning
 scikit-learn
+
+# NLP / sentence segmentation / POS tagging
+spacy
+
+# Visualisation and report figures
 matplotlib
- 
-# sentence segmentation
-nltk
- 
-# parquet cache for the sentence table
-pyarrow
- 
-# beyond-unit model 1: gradient boosting on the feature table
-lightgbm
- 
-# beyond-unit model 2: perplexity features from a small local language model
-torch
-transformers
+
+# Logistic Regression model persistence and Markdown result tables
+joblib
+tabulate
+
+# ----------------------------------------------------------------------
