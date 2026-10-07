@@ -10,7 +10,7 @@ pd.set_option("display.max_columns", 50)
 
 # Settings
 TRAIN_PATH = "data/features/drcat_train_final_sentence_features.csv"
-CLASS_LABEL = 1        # the single class to cluster: 1 = AI, 0 = human
+CLASS_LABEL = 0        # the single class to cluster: 1 = AI, 0 = human
 N_CLUSTERS = 4         # no sharp elbow in this data, so check the elbow plot below
 N_EXAMPLES = 4         # example sentences printed per cluster
 
@@ -21,17 +21,15 @@ feature_cols = [
     "pronoun_ratio", "auxiliary_ratio", "conjunction_ratio",
 ]
 
-# Metadata columns that are NOT clustering features. They are only used
-# afterwards to check that the clusters found real structure.
+# Metadata columns, not used for clustering
 check_cols = ["generator", "domain", "source_dataset", "label_origin"]
 
-# 1. Select ONE class
-# The label is used here only to choose which rows to keep. It is never a feature.
+# 1. Select one class
 full_df = pd.read_csv(TRAIN_PATH)
 df = full_df[full_df["label"] == CLASS_LABEL].reset_index(drop=True)
 print(f"Clustering {len(df):,} sentences with label {CLASS_LABEL}")
 
-# 2. Scale and cluster (features only)
+# 2. Scale and cluster
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(df[feature_cols])
 
@@ -41,7 +39,7 @@ df["cluster"] = kmeans.fit_predict(X_scaled)
 joblib.dump(scaler, "scaler_single_class.joblib")
 joblib.dump(kmeans, "kmeans_single_class.joblib")
 
-# Distance of every sentence to its own cluster centre (used to pick examples)
+# Distance of every sentence to its own cluster centre
 dists = np.linalg.norm(X_scaled - kmeans.cluster_centers_[df["cluster"]], axis=1)
 df["dist_to_center"] = dists
 
@@ -50,9 +48,7 @@ print("\n=== Cluster sizes ===")
 sizes = df["cluster"].value_counts().sort_index()
 print(pd.DataFrame({"n": sizes, "share": (sizes / len(df)).round(3)}))
 
-# 5. Describe each cluster
-# Compare each cluster's mean to the overall mean of the clustered class.
-# Differences are in overall standard deviations so features are comparable.
+# 4. Compare cluster mean to overall mean
 overall_mean = df[feature_cols].mean()
 overall_std = df[feature_cols].std()
 overall_zero = (df[feature_cols] == 0).mean()
@@ -65,7 +61,7 @@ for c in sorted(df["cluster"].unique()):
     members = df[df["cluster"] == c]
     print(f"\n----- Cluster {c}  (n={len(members):,}, {len(members) / len(df):.1%}) -----")
 
-    # Top 3 features that differ most, in either direction
+    # Most distinctive features
     top = z_diff.loc[c].abs().sort_values(ascending=False).head(3).index
     print("Most distinctive features (cluster mean vs overall mean):")
     for f in top:
@@ -73,7 +69,7 @@ for c in sorted(df["cluster"].unique()):
         print(f"  {f:24s} {cluster_mean.loc[c, f]:.3f} vs {overall_mean[f]:.3f}  "
               f"({direction}, {z_diff.loc[c, f]:+.2f} SD)")
 
-    # What is missing: features that are zero far more often than usual
+    # Missing features
     zero_share = (members[feature_cols] == 0).mean()
     missing = (zero_share - overall_zero).sort_values(ascending=False)
     missing = missing[missing > 0.10].head(3)
@@ -83,20 +79,19 @@ for c in sorted(df["cluster"].unique()):
             print(f"  {f:24s} zero in {zero_share[f]:.0%} of this cluster "
                   f"vs {overall_zero[f]:.0%} overall")
 
-    # Real examples: the sentences closest to the cluster centre are the most typical
+    # Examples
     print("Representative sentences:")
     for text in members.nsmallest(N_EXAMPLES, "dist_to_center")["text"]:
         text = str(text).replace("\\n", " ").strip()
         print(f"  - {text[:200]}")
 
-# --------------------------------------------- 6. save summary table
+# 5. Save summary table
 summary = cluster_mean.copy()
 summary.insert(0, "n", sizes)
 summary.to_csv("cluster_summary.csv")
 print("\nSaved cluster_summary.csv")
 
-# --------------------------------------------- 7. plot (all points)
-# Plot the two features that separate the clusters most (largest spread in z-diff)
+# 6. Plot
 top2 = z_diff.std().sort_values(ascending=False).head(2).index.tolist()
 
 plt.figure(figsize=(8, 6))
