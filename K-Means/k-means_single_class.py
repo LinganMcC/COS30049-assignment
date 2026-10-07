@@ -11,7 +11,7 @@ pd.set_option("display.max_columns", 50)
 # Settings
 TRAIN_PATH = "data/features/drcat_train_final_sentence_features.csv"
 CLASS_LABEL = 0        # the single class to cluster: 1 = AI, 0 = human
-N_CLUSTERS = 4         # no sharp elbow in this data, so check the elbow plot below
+N_CLUSTERS = 4         # number of clusters to form
 N_EXAMPLES = 4         # example sentences printed per cluster
 
 feature_cols = [
