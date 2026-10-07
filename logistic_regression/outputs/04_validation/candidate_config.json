@@ -1,0 +1,53 @@
+{
+  "features": [
+    "n_words",
+    "long_word_ratio",
+    "func_word_ratio",
+    "unique_word_ratio",
+    "comma_rate",
+    "exclaim",
+    "apostrophe_rate",
+    "starts_with_transition",
+    "rel_len_deviation",
+    "noun_ratio",
+    "adjective_ratio",
+    "adverb_ratio",
+    "pronoun_ratio",
+    "auxiliary_ratio",
+    "conjunction_ratio"
+  ],
+  "weighting": "uniform",
+  "class_balance": "doc_balanced",
+  "C": 0.0003,
+  "pooling": "sqrt_length",
+  "threshold": 0.5,
+  "threshold_objective": "macro_f1",
+  "solver": "lbfgs",
+  "max_iter": 3000,
+  "random_state": 42,
+  "fit_info": {
+    "n_iter": 10,
+    "C": 0.0003,
+    "weighting": "uniform",
+    "class_balance": "doc_balanced",
+    "sample_weight_min": 0.776339571043891,
+    "sample_weight_max": 1.404684041650671,
+    "sample_weight_mean": 1.0,
+    "missing_values_seen_at_fit": 0
+  },
+  "validation_metrics": {
+    "threshold": 0.5,
+    "n_documents": 7133,
+    "accuracy": 0.8337305481564559,
+    "precision": 0.7845917976236105,
+    "recall": 0.7663796330962186,
+    "f1": 0.7753787878787879,
+    "macro_f1": 0.8216978515401061,
+    "roc_auc": 0.9143769232460273,
+    "average_precision": 0.8716336919078856,
+    "tn": 3900,
+    "fp": 562,
+    "fn": 624,
+    "tp": 2047
+  }
+}

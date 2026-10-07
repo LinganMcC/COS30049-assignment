@@ -1,0 +1,16 @@
+feature,coefficient,abs_coefficient,odds_ratio_per_1sd,direction,meaning
+long_word_ratio,0.6114661994325544,0.6114661994325544,1.843131817446577,toward AI,Fraction of words with at least 7 characters.
+comma_rate,0.5375954987605569,0.5375954987605569,1.7118856782393899,toward AI,Number of commas divided by sentence word count.
+rel_len_deviation,-0.27276702914418205,0.27276702914418205,0.7612701207229443,toward Human,"Absolute sentence word-count deviation from its document mean, divided by that mean."
+starts_with_transition,0.27252580477855864,0.27252580477855864,1.3132773473063781,toward AI,1 when the sentence starts with a configured transition phrase.
+auxiliary_ratio,-0.256450989402781,0.256450989402781,0.7737929176831668,toward Human,Fraction of alphabetic tokens tagged AUX by spaCy.
+adverb_ratio,-0.21283134477164134,0.21283134477164134,0.8082924484688396,toward Human,Fraction of alphabetic tokens tagged ADV by spaCy.
+unique_word_ratio,0.2054334123570793,0.2054334123570793,1.2280572048046188,toward AI,Fraction of distinct lower-cased word tokens in the sentence.
+exclaim,0.20200404579681258,0.20200404579681258,1.2238529595617447,toward AI,"1 when the sentence contains an exclamation mark, otherwise 0."
+adjective_ratio,0.19446188882346727,0.19446188882346727,1.2146571899883163,toward AI,Fraction of alphabetic tokens tagged ADJ by spaCy.
+apostrophe_rate,0.19194694280961672,0.19194694280961672,1.211606230837036,toward AI,Number of apostrophes divided by sentence word count.
+conjunction_ratio,0.1297986242406595,0.1297986242406595,1.1385990739836176,toward AI,Fraction of alphabetic tokens tagged CCONJ or SCONJ by spaCy.
+noun_ratio,-0.12492158314049233,0.12492158314049233,0.8825661079336189,toward Human,Fraction of alphabetic tokens tagged NOUN or PROPN by spaCy.
+func_word_ratio,0.06357256946130059,0.06357256946130059,1.0656368156851952,toward AI,Fraction of words in the configured function-word list.
+pronoun_ratio,0.057761737906563165,0.057761737906563165,1.059462535873962,toward AI,Fraction of alphabetic tokens tagged PRON by spaCy.
+n_words,0.004188728407735435,0.004188728407735435,1.004197513392261,toward AI,Number of alphabetic/apostrophe word tokens in the sentence.

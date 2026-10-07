@@ -1,0 +1,10 @@
+{
+  "weighting": "uniform",
+  "class_balance": "doc_balanced",
+  "C": 0.001,
+  "pooling": "sqrt_length",
+  "mean_roc_auc": 0.9683924366176736,
+  "mean_average_precision": 0.9487494924806322,
+  "selection_score": 0.9585709645491529,
+  "note": "Recommendation only. Inspect the full CV tables before freezing."
+}

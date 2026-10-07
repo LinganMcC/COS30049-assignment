@@ -1,0 +1,2 @@
+threshold,n_documents,accuracy,precision,recall,f1,macro_f1,roc_auc,average_precision,tn,fp,fn,tp
+0.5,2000,0.6055,0.644718792866941,0.47,0.5436668594563332,0.5981214085921032,0.656008,0.6017113418627554,741,259,530,470

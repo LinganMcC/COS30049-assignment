@@ -32,7 +32,7 @@ data/features/.checkpoints/
 # ============================================================
 
 # All generated Logistic Regression results stay local
-logistic_regression/outputs/
+#logistic_regression/outputs/
 
 
 # ============================================================

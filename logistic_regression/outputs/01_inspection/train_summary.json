@@ -1,0 +1,29 @@
+{
+  "n_sentences": 592757,
+  "n_documents": 31119,
+  "n_groups": 11,
+  "sentence_class_counts": {
+    "0": 381764,
+    "1": 210993
+  },
+  "document_class_counts": {
+    "0": 18868,
+    "1": 12251
+  },
+  "ai_share_sentences": 0.35595193308556455,
+  "ai_share_documents": 0.393682316269803,
+  "groups_with_both_labels": 11,
+  "missing_feature_values": 0,
+  "missing_by_feature": {},
+  "zero_word_sentences": 0,
+  "sentences_per_document": {
+    "count": 31119.0,
+    "mean": 19.048073524213503,
+    "std": 8.501936585414871,
+    "min": 1.0,
+    "25%": 13.0,
+    "50%": 18.0,
+    "75%": 23.0,
+    "max": 91.0
+  }
+}
