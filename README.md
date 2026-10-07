@@ -1,312 +1,160 @@
-# COS30049 AI-Generated Content Detection
+# COS30049 Assignment 2 — AI-Generated Content Detection
 
-This repository contains the data preparation, sentence segmentation, feature extraction, and Logistic Regression baseline for the COS30049 AI-Generated Content Detection project.
+This repository contains the final machine-learning work for COS30049 Assignment 2:
 
-The current README documents the reproducible pipeline **from raw datasets through the completed Logistic Regression model**. The `K-Means/` and later Transformer/model work are separate team components and can be documented when those implementations are finalised.
+- DRCAT + HC3 preprocessing and transformation
+- leakage-safe DRCAT TRAIN / VALIDATION / TEST splitting
+- HC3 external challenge set
+- spaCy sentence segmentation
+- 15 interpretable stylometric / POS features
+- Logistic Regression baseline
+- K-Means clustering within a single class
+- Transformer encoder trained from scratch
+- internal DRCAT evaluation and external HC3 evaluation
 
----
-
-## 1. Project structure
-
-```text
-COS30049-assignment/
-│
-├── data/
-│   ├── raw/
-│   ├── processed/
-│   ├── sentences/
-│   └── features/
-│
-├── Preprocess/
-│   ├── data_adapters.py
-│   ├── data_cleaning.py
-│   ├── data_splitting.py
-│   ├── download_hc3.py
-│   ├── preprocess.py
-│   ├── preprocess_report.py
-│   └── sentence_splitter.py
-│
-├── Feature_extraction/
-│   ├── build_final_sentence_feature_table.py
-│   ├── feature_config.py
-│   └── features.py
-│
-├── logistic_regression/
-│   ├── config.py
-│   ├── requirements.txt
-│   ├── run_development.py
-│   ├── run_final_evaluation.py
-│   ├── scripts/
-│   │   ├── 01_inspect_train.py
-│   │   ├── 02_coarse_tuning.py
-│   │   ├── 03_fine_tuning.py
-│   │   ├── 04_validate_freeze.py
-│   │   ├── 05_final_eval.py
-│   │   └── 06_error_analysis.py
-│   ├── src/
-│   ├── experiments/
-│   ├── tests/
-│   └── outputs/
-│
-├── K-Means/                         # teammate component
-├── results/
-│   └── feature_analysis/
-│
-├── analyze_features_for_report.py
-├── evaluate_full_train_15_features.py
-├── requirements.txt
-└── README.md
-```
-
-### Main pipeline
-
-```text
-Raw DRCAT + HC3
-        ↓
-Document adaptation and cleaning
-        ↓
-DRCAT TRAIN / VALIDATION / TEST
-HC3 external test
-        ↓
-spaCy sentence segmentation
-        ↓
-15 sentence-level features
-        ↓
-DRCAT TRAIN grouped CV
-        ↓
-Logistic Regression tuning
-        ↓
-VALIDATION threshold selection
-        ↓
-Frozen Logistic Regression model
-        ↓
-DRCAT TEST + HC3 external evaluation
-        ↓
-False-positive / false-negative analysis
-```
+The final prediction model reported in the assignment is the Transformer. Logistic Regression is retained as an interpretable baseline, while K-Means is used for unsupervised within-class analysis.
 
 ---
 
-## 2. Environment setup
+## 1. Environment setup with Conda
 
-Run commands from the **project root** unless a later section explicitly says to change directory.
-
-### 2.1 Optional virtual environment
+Run commands from the project root unless stated otherwise.
 
 ```bash
-python -m venv .venv
-```
+conda create -n cos30049-ai-detection python=3.12 pip -y
+conda activate cos30049-ai-detection
 
-Activate it.
-
-**Windows Git Bash**
-
-```bash
-source .venv/Scripts/activate
-```
-
-**Windows PowerShell**
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-**Linux/macOS**
-
-```bash
-source .venv/bin/activate
-```
-
-### 2.2 Install project dependencies
-
-```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install -r logistic_regression/requirements.txt
-```
-
-The preprocessing and final feature extractor use spaCy. Install spaCy and its English model if they are not already installed:
-
-```bash
-python -m pip install spacy
 python -m spacy download en_core_web_sm
 ```
 
-The Logistic Regression-specific requirements include packages such as `joblib` and `tabulate`, which are needed for saving the model and generating Markdown result tables.
+To leave the environment:
+
+```bash
+conda deactivate
+```
+
+A GPU is optional. PyTorch will use CUDA automatically when a compatible NVIDIA GPU is available; otherwise the Transformer can run on CPU.
 
 ---
 
-## 3. Prepare the raw datasets
+## 2. Submitted processed datasets
 
-Create the raw-data folder if necessary:
+The assignment ZIP is intended to include already-processed data so the marker does **not** need to redownload DRCAT or HC3 just to inspect or reproduce the final model work.
 
-```bash
-mkdir -p data/raw
-```
-
-### 3.1 DRCAT
-
-Obtain the **DAIGT V2 Train Dataset (DRCAT)** and place:
+Recommended submitted data:
 
 ```text
-train_v2_drcat_02.csv
+data/
+├── processed/
+│   └── unified_documents.csv
+│
+├── sentences/
+│   ├── drcat_train_sentences.csv
+│   ├── drcat_validation_sentences.csv
+│   ├── drcat_test_sentences.csv
+│   └── hc3_external_test_sentences.csv
+│
+└── features/
+    ├── drcat_train_final_sentence_features.csv
+    ├── drcat_validation_final_sentence_features.csv
+    ├── drcat_test_final_sentence_features.csv
+    └── hc3_external_test_final_sentence_features.csv
 ```
 
-at:
+### Fastest marking path
+
+If the sentence CSVs and feature CSVs are already included:
+
+- **Transformer:** use the submitted sentence CSVs directly.
+- **Logistic Regression:** use the submitted final feature CSVs directly.
+- **K-Means:** use `drcat_train_final_sentence_features.csv` directly.
+- Preprocessing and feature extraction only need to be rerun if full reproduction from the raw sources is desired.
+
+`unified_documents.csv` is included as transformation/audit evidence showing the common schema created from the different DRCAT and HC3 formats. It is not the file used directly to train the final models.
+
+Expected counts used in the report:
+
+| Split | Documents | Sentences |
+|---|---:|---:|
+| DRCAT TRAIN | 31,119 | 592,757 |
+| DRCAT VALIDATION | 7,133 | 158,996 |
+| DRCAT TEST | 6,612 | 151,878 |
+| HC3 external test | 2,000 | 14,752 |
+
+The sentence labels are inherited from the source document labels, recorded with:
+
+```text
+label_origin = document_inherited
+```
+
+---
+
+## 3. Rebuild the processed datasets from raw data (optional)
+
+This section is optional if the processed data above is already supplied.
+
+### 3.1 Raw DRCAT
+
+Place the DAIGT V2 / DRCAT CSV at:
 
 ```text
 data/raw/train_v2_drcat_02.csv
 ```
 
-Dataset source:
-
-```text
-https://www.kaggle.com/datasets/thedrcat/daigt-v2-train-dataset
-```
-
-### 3.2 HC3
-
-The project contains a downloader for the official English HC3 `all.jsonl` file.
-
-Run:
+### 3.2 Download HC3
 
 ```bash
 python Preprocess/download_hc3.py --out data/raw/hc3_all.jsonl
 ```
 
-Expected file:
-
-```text
-data/raw/hc3_all.jsonl
-```
-
-If the file already exists, the downloader keeps the existing copy. Use `--overwrite` only if a fresh copy is intentionally required.
-
----
-
-## 4. Run document-level preprocessing
-
-Run:
+### 3.3 Preprocess both sources
 
 ```bash
 python Preprocess/preprocess.py \
-    --drcat data/raw/train_v2_drcat_02.csv \
-    --hc3 data/raw/hc3_all.jsonl
+  --drcat data/raw/train_v2_drcat_02.csv \
+  --hc3 data/raw/hc3_all.jsonl \
+  --out-dir data/processed
 ```
 
-The frozen preprocessing configuration uses:
+This creates the common schema, leakage-safe DRCAT document partitions, the balanced HC3 external test, transformation examples, and a preprocessing report.
 
-```text
-HC3 minimum document length: 30 characters
-HC3 maximum document length: 20,000 characters
-HC3 external question groups: 1,000
-random seed: 42
-```
-
-These are already the script defaults, so they do not need to be supplied unless intentionally changed.
-
-### What preprocessing does
-
-The pipeline:
-
-1. adapts DRCAT and HC3 into the common schema;
-2. performs conservative text cleaning;
-3. removes same-label duplicates;
-4. applies the 30–20,000 character filter to HC3 only;
-5. creates leakage-safe DRCAT prompt-group TRAIN / VALIDATION / TEST partitions;
-6. creates the balanced HC3 external test;
-7. generates preprocessing audit files.
-
-### Expected output
-
-```text
-data/processed/
-├── unified_documents.csv
-├── drcat_train.csv
-├── drcat_validation.csv
-├── drcat_test.csv
-├── hc3_external_test.csv
-├── transformation_examples.csv
-└── preprocess_report.txt
-```
-
-Expected final document counts:
-
-| Dataset | Documents |
-|---|---:|
-| DRCAT TRAIN | 31,119 |
-| DRCAT VALIDATION | 7,133 |
-| DRCAT TEST | 6,612 |
-| HC3 external test | 2,000 |
-
-`unified_documents.csv` is for audit, analysis, and visualisation. **Do not randomly split this file for model development.** DRCAT remains the development dataset and HC3 remains external evaluation data.
-
----
-
-## 5. Split documents into sentences
-
-The final sentence splitter uses spaCy `en_core_web_sm`.
-
-Run all processed datasets:
+### 3.4 Sentence splitting
 
 ```bash
 python Preprocess/sentence_splitter.py \
-    --processed-dir data/processed \
-    --out-dir data/sentences
+  --processed-dir data/processed \
+  --out-dir data/sentences
 ```
 
-Expected sentence files:
-
-```text
-data/sentences/
-├── drcat_train_sentences.csv
-├── drcat_validation_sentences.csv
-├── drcat_test_sentences.csv
-├── hc3_external_test_sentences.csv
-├── drcat_train_sentences_removed_fragments.csv
-├── drcat_validation_sentences_removed_fragments.csv
-├── drcat_test_sentences_removed_fragments.csv
-└── hc3_external_test_sentences_removed_fragments.csv
-```
-
-The `*_removed_fragments.csv` files are audit files for fragments containing no alphabetic characters.
-
-Each retained sentence preserves:
-
-```text
-sentence_id
-document_id
-sentence_index
-text
-label
-label_origin
-source_dataset
-group_key
-domain
-generator
-```
-
-`label_origin` is recorded as `document_inherited` because the source datasets provide document-level labels rather than independently labelled sentences.
-
-Expected usable sentence counts:
-
-| Dataset | Sentences |
-|---|---:|
-| DRCAT TRAIN | 592,757 |
-| DRCAT VALIDATION | 158,996 |
-| DRCAT TEST | 151,878 |
-| HC3 external test | 14,752 |
+The final sentence splitter uses spaCy `en_core_web_sm`.
 
 ---
 
-## 6. Build the final 15-feature sentence tables
+## 4. Build the final 15-feature tables
 
-The production feature extractor uses:
+Skip this section if the four final feature CSVs are already included.
 
-- 9 stylometric / lexical features;
-- 6 spaCy POS-ratio features.
+```bash
+python Feature_extraction/build_final_sentence_feature_table.py \
+  --input data/sentences/drcat_train_sentences.csv \
+  --output data/features/drcat_train_final_sentence_features.csv
 
-The frozen feature list is:
+python Feature_extraction/build_final_sentence_feature_table.py \
+  --input data/sentences/drcat_validation_sentences.csv \
+  --output data/features/drcat_validation_final_sentence_features.csv
+
+python Feature_extraction/build_final_sentence_feature_table.py \
+  --input data/sentences/drcat_test_sentences.csv \
+  --output data/features/drcat_test_final_sentence_features.csv
+
+python Feature_extraction/build_final_sentence_feature_table.py \
+  --input data/sentences/hc3_external_test_sentences.csv \
+  --output data/features/hc3_external_test_final_sentence_features.csv
+```
+
+Final features:
 
 ```text
 n_words
@@ -326,393 +174,75 @@ auxiliary_ratio
 conjunction_ratio
 ```
 
-Create the feature output directory:
-
-```bash
-mkdir -p data/features
-```
-
-### 6.1 TRAIN
-
-```bash
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_train_sentences.csv \
-    --output data/features/drcat_train_final_sentence_features.csv
-```
-
-### 6.2 VALIDATION
-
-```bash
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_validation_sentences.csv \
-    --output data/features/drcat_validation_final_sentence_features.csv
-```
-
-### 6.3 DRCAT TEST
-
-```bash
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_test_sentences.csv \
-    --output data/features/drcat_test_final_sentence_features.csv
-```
-
-### 6.4 HC3 external test
-
-```bash
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/hc3_external_test_sentences.csv \
-    --output data/features/hc3_external_test_final_sentence_features.csv
-```
-
-Expected output:
-
-```text
-data/features/
-├── drcat_train_final_sentence_features.csv
-├── drcat_validation_final_sentence_features.csv
-├── drcat_test_final_sentence_features.csv
-└── hc3_external_test_final_sentence_features.csv
-```
-
-The feature builder validates that all 15 model features exist and stops if any NaN or infinite model-feature values are detected.
+Metadata columns such as `document_id`, `group_key`, `source_dataset`, `domain`, `generator`, and `label_origin` are retained for grouping/auditing but are not predictive model features.
 
 ---
 
-## 7. Optional TRAIN-only feature analysis for the report
+## 5. Logistic Regression baseline
 
-This step is **analysis only**. It does not retrain or modify the model.
+The Logistic Regression baseline uses the four final feature tables.
 
-Run from the project root:
-
-```bash
-python analyze_features_for_report.py \
-    --input data/features/drcat_train_final_sentence_features.csv \
-    --output-dir results/feature_analysis/report
-```
-
-Expected outputs:
-
-```text
-results/feature_analysis/report/
-├── feature_class_summary.csv
-├── feature_effect_sizes.png
-└── feature_correlation_heatmap.png
-```
-
-These files provide:
-
-- Human and AI means / medians for each final feature;
-- Cohen's d Human–AI effect sizes;
-- Pearson correlations among the 15 final features.
-
-Only **DRCAT TRAIN** is used for this analysis so VALIDATION, TEST, and HC3 do not influence the feature investigation.
-
----
-
-# 8. Logistic Regression baseline
-
-The Logistic Regression stage uses the four final feature tables generated above.
-
-## 8.1 Folder-name compatibility
-
-The current project folder is named:
-
-```text
-Feature_extraction/
-```
-
-while `logistic_regression/config.py` supports an environment variable for locating the feature configuration.
-
-### Windows Git Bash / Linux / macOS
-
-Change into the Logistic Regression folder and set the paths:
+From the project root:
 
 ```bash
 cd logistic_regression
+```
 
+### Windows Git Bash
+
+```bash
 export LR_FEATURE_DIR="../Feature_extraction"
 export LR_DATA_DIR="../data/features"
 export LR_OUTPUT_DIR="outputs"
 ```
 
-### Windows PowerShell
-
-```powershell
-cd logistic_regression
-
-$env:LR_FEATURE_DIR="../Feature_extraction"
-$env:LR_DATA_DIR="../data/features"
-$env:LR_OUTPUT_DIR="outputs"
-```
-
-The following Logistic Regression commands are run from inside:
-
-```text
-logistic_regression/
-```
-
----
-
-## 8.2 Step 1 — inspect TRAIN and run coarse grouped-CV tuning
-
-Run:
+### 5.1 Development / grouped cross-validation
 
 ```bash
 python run_development.py
 ```
 
-This runs:
-
-```text
-scripts/01_inspect_train.py
-scripts/02_coarse_tuning.py
-```
-
-It uses DRCAT TRAIN only and **does not access DRCAT TEST or HC3**.
-
-The coarse search compares:
-
-```text
-Sentence weighting:
-    uniform
-    doc_equal
-    sqrt_doc
-
-Class balancing:
-    none
-    doc_balanced
-
-C:
-    0.001
-    0.01
-    0.1
-    1
-    10
-    100
-
-Document pooling:
-    mean
-    sqrt_length
-```
-
-Expected outputs:
-
-```text
-outputs/
-├── 01_inspection/
-│   ├── feature_ranges.csv
-│   ├── train_inspection.md
-│   └── train_summary.json
-│
-└── 02_coarse_tuning/
-    ├── all_fold_results.csv
-    ├── coarse_tuning_report.md
-    ├── configuration_summary.csv
-    ├── cv_fold_structure.csv
-    └── recommended_config.json
-```
-
-The main file to inspect is:
-
-```text
-outputs/02_coarse_tuning/configuration_summary.csv
-```
-
-Model-family selection uses:
-
-```text
-selection_score =
-(mean ROC-AUC + mean Average Precision) / 2
-```
-
-as a transparent recommendation score.
-
----
-
-## 8.3 Step 2 — reproduce the final fine C search
-
-The final project fixed the coarse choices as:
-
-```text
-sentence weighting = uniform
-class balance       = doc_balanced
-pooling             = sqrt_length
-```
-
-and then compared the following fine C values:
-
-```text
-0.0001
-0.0003
-0.001
-0.003
-0.01
-```
-
-Run:
+### 5.2 Fine-tuning around the final selected region
 
 ```bash
 python scripts/03_fine_tuning.py \
-    --weighting uniform \
-    --class-balance doc_balanced \
-    --pooling sqrt_length \
-    --c-values 0.0001 0.0003 0.001 0.003 0.01
+  --weighting uniform \
+  --class-balance doc_balanced \
+  --pooling sqrt_length \
+  --c-values 0.0001 0.0003 0.001 0.003 0.01
 ```
 
-Expected outputs:
-
-```text
-outputs/03_fine_tuning/
-├── all_fold_results.csv
-├── configuration_summary.csv
-├── fine_tuning_report.md
-└── recommended_config.json
-```
-
-The selected value in the frozen project is:
-
-```text
-C = 0.0003
-```
-
----
-
-## 8.4 Step 3 — validation, threshold selection, and model freezing
-
-Run:
+### 5.3 Freeze the final selected configuration
 
 ```bash
 python scripts/04_validate_freeze.py \
-    --weighting uniform \
-    --class-balance doc_balanced \
-    --c 0.0003 \
-    --pooling sqrt_length
+  --weighting uniform \
+  --class-balance doc_balanced \
+  --c 0.0003 \
+  --pooling sqrt_length
 ```
 
-This:
-
-1. fits the chosen configuration using all DRCAT TRAIN data;
-2. scores DRCAT VALIDATION;
-3. sweeps classification thresholds from 0.05 to 0.95;
-4. selects the threshold using macro-F1;
-5. creates Logistic Regression coefficient evidence;
-6. freezes the fitted model and final configuration.
-
-Expected validation outputs:
-
-```text
-outputs/04_validation/
-├── candidate_config.json
-├── coefficients.csv
-├── coefficients.png
-├── threshold_sweep.csv
-├── threshold_sweep.png
-├── validation_document_scores.csv
-└── validation_report.md
-```
-
-Expected frozen model:
-
-```text
-outputs/05_frozen_model/
-├── frozen_config.json
-└── logistic_regression.joblib
-```
-
-The final frozen configuration should contain:
-
-```text
-sentence weighting = uniform
-class balance       = doc_balanced
-regularisation      = L2
-C                   = 0.0003
-solver              = lbfgs
-max_iter            = 3000
-pooling             = sqrt_length
-threshold           = 0.50
-random_state        = 42
-```
-
-If a reviewer wants to inspect VALIDATION before writing the frozen model, add:
-
-```text
---no-freeze
-```
-
-to the validation command, inspect the outputs, and then rerun the command without `--no-freeze`.
-
----
-
-## 8.5 Step 4 — final DRCAT TEST and HC3 external evaluation
-
-Only run this after the model has been frozen.
+### 5.4 Final DRCAT TEST + HC3 evaluation
 
 ```bash
 python run_final_evaluation.py
 ```
 
-This runs:
+Then return to the project root:
 
-```text
-scripts/05_final_eval.py
-scripts/06_error_analysis.py
+```bash
+cd ..
 ```
 
-The final evaluation computes:
+Frozen model files:
 
 ```text
-Accuracy
-Precision
-Recall
-F1
-ROC-AUC
-Average Precision
-Confusion matrix
-95% group-bootstrap confidence intervals
+logistic_regression/outputs/05_frozen_model/
+├── logistic_regression.joblib
+└── frozen_config.json
 ```
 
-for both DRCAT TEST and HC3 external evaluation.
-
-Expected outputs:
-
-```text
-outputs/06_final_eval/
-├── test/
-│   ├── confusion_matrix.csv
-│   ├── document_scores.csv
-│   ├── evaluation_report.md
-│   ├── metrics.csv
-│   └── metrics_with_group_bootstrap_ci.csv
-│
-├── hc3/
-│   ├── confusion_matrix.csv
-│   ├── document_scores.csv
-│   ├── evaluation_report.md
-│   ├── metrics.csv
-│   └── metrics_with_group_bootstrap_ci.csv
-│
-└── comparison/
-    ├── drcat_vs_hc3.csv
-    └── drcat_vs_hc3.md
-```
-
-The same command also generates:
-
-```text
-outputs/07_error_analysis/
-├── test_document_outcomes.csv
-├── test_error_analysis.md
-├── hc3_document_outcomes.csv
-└── hc3_error_analysis.md
-```
-
-These files contain the false-positive / false-negative examples and sentence-level Logistic Regression contributions used for manual error analysis.
-
----
-
-## 8.6 Expected final Logistic Regression results
-
-These values can be used as a reproducibility check.
+Reported document-level results:
 
 | Metric | DRCAT TEST | HC3 external |
 |---|---:|---:|
@@ -723,148 +253,259 @@ These values can be used as a reproducibility check.
 | ROC-AUC | 0.959 | 0.656 |
 | Average Precision | 0.940 | 0.602 |
 
-Small differences may occur only if the underlying raw data, package versions, or project configuration are changed. The frozen project uses `random_state = 42`.
-
 ---
 
-## 9. Optional Logistic Regression stress experiments
+## 6. K-Means clustering
 
-These experiments are separate from the core frozen pipeline.
+K-Means is applied **within one class at a time** and does not use the label as a clustering feature.
 
-From inside `logistic_regression/`:
+The final script is:
 
-```bash
-python experiments/stress_tests.py
+```text
+K-Means/k-means_single_class.py
 ```
 
-They include additional robustness and subgroup investigations. They should not be used to retune the already-frozen model after TEST or HC3 results have been observed.
+It reads:
+
+```text
+data/features/drcat_train_final_sentence_features.csv
+```
+
+The current script uses constants near the top:
+
+```python
+CLASS_LABEL = 0   # 0 = Human, 1 = AI
+N_CLUSTERS = 4
+```
+
+### Reproduce the Human clustering
+
+Set:
+
+```python
+CLASS_LABEL = 0
+```
+
+then run from the project root:
+
+```bash
+python "K-Means/k-means_single_class.py"
+```
+
+### Reproduce the AI clustering
+
+Set:
+
+```python
+CLASS_LABEL = 1
+```
+
+and run the same command again:
+
+```bash
+python "K-Means/k-means_single_class.py"
+```
+
+The script generates the cluster summary and serialises the fitted scaler and K-Means model:
+
+```text
+cluster_summary.csv
+scaler_single_class.joblib
+kmeans_single_class.joblib
+```
+
+Because the filenames are reused, preserve/rename the Human outputs before rerunning the script for AI (or vice versa) if both fitted versions are required.
+
+The report interprets clusters using:
+
+- cluster sizes;
+- feature means compared with the class-wide mean;
+- the most distinctive features in standard-deviation units;
+- features that are unusually often zero;
+- representative sentences near each cluster centre.
+
+K-Means is an unsupervised analysis model and is not used as the final end-user classifier.
 
 ---
 
-## 10. Quick reproduction checklist
+## 7. Transformer encoder — final prediction model
 
-From the project root:
+The Transformer is trained from scratch and learns a byte-level BPE vocabulary using DRCAT TRAIN only.
+
+Train/evaluate from the project root:
 
 ```bash
-# 1. Install
-python -m pip install -r requirements.txt
-python -m pip install -r logistic_regression/requirements.txt
-python -m pip install spacy
-python -m spacy download en_core_web_sm
+python transformer/train_transformer.py \
+  --sentence-dir data/sentences \
+  --output-dir results/transformer
+```
 
-# 2. Download HC3
-python Preprocess/download_hc3.py --out data/raw/hc3_all.jsonl
+Default final settings:
 
-# 3. Preprocess DRCAT + HC3
-python Preprocess/preprocess.py \
-    --drcat data/raw/train_v2_drcat_02.csv \
-    --hc3 data/raw/hc3_all.jsonl
+```text
+BPE vocabulary     = 8,000
+max tokens         = 64
+encoder layers     = 4
+attention heads    = 4
+embedding size     = 256
+feed-forward size  = 1,024
+dropout            = 0.1
+optimizer          = AdamW
+learning rate      = 3e-4
+batch size         = 128
+epochs             = 5
+random seed        = 42
+minimum sentence   = 5 words
+```
 
-# 4. Sentence splitting
-python Preprocess/sentence_splitter.py \
-    --processed-dir data/processed \
-    --out-dir data/sentences
+The training script:
 
-# 5. Build TRAIN features
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_train_sentences.csv \
-    --output data/features/drcat_train_final_sentence_features.csv
+1. trains the tokenizer on DRCAT TRAIN only;
+2. trains the Transformer;
+3. keeps the epoch with the best validation sentence ROC-AUC;
+4. selects sentence/document thresholds using VALIDATION only;
+5. evaluates the frozen model on DRCAT TEST and HC3;
+6. saves final prediction/result files.
 
-# 6. Build VALIDATION features
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_validation_sentences.csv \
-    --output data/features/drcat_validation_final_sentence_features.csv
+Main output files include:
 
-# 7. Build TEST features
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/drcat_test_sentences.csv \
-    --output data/features/drcat_test_final_sentence_features.csv
+```text
+results/transformer/
+├── best_model.pt
+├── tokenizer.json
+├── transformer_comparison.csv
+├── test_sentence_predictions.csv
+├── test_document_predictions.csv
+├── hc3_external_sentence_predictions.csv
+└── hc3_external_document_predictions.csv
+```
 
-# 8. Build HC3 features
-python Feature_extraction/build_final_sentence_feature_table.py \
-    --input data/sentences/hc3_external_test_sentences.csv \
-    --output data/features/hc3_external_test_final_sentence_features.csv
+Reported document-level results:
 
-# 9. Optional feature-analysis evidence
+| Metric | LR DRCAT | Transformer DRCAT | LR HC3 | Transformer HC3 |
+|---|---:|---:|---:|---:|
+| Accuracy | 0.888 | 0.984 | 0.606 | 0.842 |
+| Precision | 0.894 | 0.974 | 0.645 | 0.888 |
+| Recall | 0.809 | 0.986 | 0.470 | 0.783 |
+| F1 | 0.850 | 0.980 | 0.544 | 0.832 |
+| ROC-AUC | 0.959 | 0.998 | 0.656 | 0.932 |
+
+### Predict new text
+
+The repository contains:
+
+```text
+transformer/check_my_text.py
+```
+
+Create a text file such as:
+
+```text
+sample.txt
+```
+
+Then run the prediction script according to the import paths in the submitted repository.
+
+If the current repository version supports direct execution from the project root:
+
+```bash
+python transformer/check_my_text.py sample.txt
+```
+
+The script loads the submitted Transformer checkpoint and tokenizer, splits the input into sentences, excludes sentences under five words, prints sentence-level AI probabilities, and aggregates them into a document score and confidence range.
+
+---
+
+## 8. TRAIN-only feature analysis used in the report
+
+```bash
 python analyze_features_for_report.py \
-    --input data/features/drcat_train_final_sentence_features.csv \
-    --output-dir results/feature_analysis/report
+  --input data/features/drcat_train_final_sentence_features.csv \
+  --output-dir results/feature_analysis/report
 ```
 
-Then enter Logistic Regression:
-
-```bash
-cd logistic_regression
-
-export LR_FEATURE_DIR="../Feature_extraction"
-export LR_DATA_DIR="../data/features"
-export LR_OUTPUT_DIR="outputs"
-```
-
-Run development and final modelling:
-
-```bash
-# 10. TRAIN inspection + coarse tuning
-python run_development.py
-
-# 11. Fine C tuning
-python scripts/03_fine_tuning.py \
-    --weighting uniform \
-    --class-balance doc_balanced \
-    --pooling sqrt_length \
-    --c-values 0.0001 0.0003 0.001 0.003 0.01
-
-# 12. VALIDATION + freeze
-python scripts/04_validate_freeze.py \
-    --weighting uniform \
-    --class-balance doc_balanced \
-    --c 0.0003 \
-    --pooling sqrt_length
-
-# 13. TEST + HC3 + error analysis
-python run_final_evaluation.py
-```
-
-At this point the full pipeline through the **Logistic Regression baseline** has been reproduced.
+This produces TRAIN-only feature summaries, Cohen's d effect sizes and Pearson-correlation analysis without using VALIDATION, TEST or HC3 to choose features.
 
 ---
 
-## 11. Important data-use rules
+## 9. Fast reproduction path for markers
 
-To preserve the evaluation design:
+If all processed datasets and final artifacts are supplied:
 
-- **DRCAT TRAIN** is used for model fitting and grouped cross-validation.
-- **DRCAT VALIDATION** is used for threshold selection.
-- **DRCAT TEST** is final internal evaluation only.
-- **HC3** is external evaluation only.
-- Do not tune the Logistic Regression model after viewing TEST or HC3 results.
-- Metadata columns such as `document_id`, `group_key`, `source_dataset`, `domain`, and `generator` are not predictive Logistic Regression features.
-- The classifier uses only the frozen 15 numerical sentence features defined in `Feature_extraction/feature_config.py`.
+1. Create the Conda environment.
+2. Install `requirements.txt`.
+3. Install `en_core_web_sm`.
+4. Use `data/features/*.csv` directly for Logistic Regression and K-Means.
+5. Use `data/sentences/*.csv` directly for Transformer training/evaluation.
+6. Inspect the supplied frozen Logistic Regression model and Transformer result/model files.
+7. Raw DRCAT/HC3 downloading and preprocessing are optional.
+
+This is the recommended marking path because the assignment submission already includes the processed data used by the final machine-learning work.
 
 ---
 
-## 12. Current project scope
+## 10. What should be included in the Canvas ZIP
 
-This README currently documents:
-
-```text
-✓ data collection setup
-✓ preprocessing
-✓ dataset transformation
-✓ leakage-safe splitting
-✓ sentence segmentation
-✓ final 15-feature extraction
-✓ TRAIN-only feature analysis
-✓ Logistic Regression tuning
-✓ validation and freezing
-✓ DRCAT TEST evaluation
-✓ HC3 external evaluation
-✓ error analysis
-```
-
-The following team components are outside the current version of this README and should be documented after their implementations are finalised:
+Recommended:
 
 ```text
-K-Means clustering
-Transformer / other beyond-unit model
+README.md
+requirements.txt
+
+Preprocess/
+Feature_extraction/
+logistic_regression/
+K-Means/
+transformer/
+analyze_features_for_report.py
+
+data/processed/unified_documents.csv
+
+data/sentences/
+├── drcat_train_sentences.csv
+├── drcat_validation_sentences.csv
+├── drcat_test_sentences.csv
+└── hc3_external_test_sentences.csv
+
+data/features/
+├── drcat_train_final_sentence_features.csv
+├── drcat_validation_final_sentence_features.csv
+├── drcat_test_final_sentence_features.csv
+└── hc3_external_test_final_sentence_features.csv
+
+logistic_regression/outputs/05_frozen_model/
+├── logistic_regression.joblib
+└── frozen_config.json
+
+results/transformer/
+├── best_model.pt              # include if this is the checkpoint used for the reported results
+├── tokenizer.json
+└── transformer_comparison.csv
+
+K-Means report/result files actually used in the report
 ```
+
+For K-Means, include any saved scaler/K-Means `.joblib` files if they were generated and retained in the final project. If the final repository only retains the script and report outputs, do not invent additional artifacts; the clustering can be reproduced directly from the submitted TRAIN feature CSV.
+
+Do **not** include unnecessary files such as:
+
+```text
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+large obsolete checkpoints
+duplicate experimental outputs
+raw downloaded datasets unless intentionally required
+```
+
+---
+
+## 11. GitHub versus Canvas
+
+GitHub is used for version control. The Canvas ZIP is the actual assessment package.
+
+Large processed datasets, generated outputs, and binary model files may remain ignored on GitHub if that is your repository policy. However, the **Canvas ZIP should contain the processed model inputs and the final artifacts actually needed to inspect/reproduce the submitted models**, even when those files are excluded by `.gitignore`.
+
+Do not create the Canvas ZIP by downloading the GitHub repository if ignored model/data files are required. Build the ZIP from the final local project folder.

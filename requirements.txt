@@ -1,28 +1,15 @@
 # COS30049 AI-Generated Content Detection
-# Dependencies required for the current reproducible pipeline:
-# preprocessing -> sentence splitting -> feature extraction -> Logistic Regression.
-#
-# Install with:
+# Install inside the Conda environment described in README.md:
 #   python -m pip install -r requirements.txt
-#
-# spaCy's English model is installed separately:
+# Then install the spaCy English model separately:
 #   python -m spacy download en_core_web_sm
 
-# Data handling
 pandas
 numpy
-
-# Machine learning
 scikit-learn
-
-# NLP / sentence segmentation / POS tagging
-spacy
-
-# Visualisation and report figures
-matplotlib
-
-# Logistic Regression model persistence and Markdown result tables
 joblib
+spacy
+matplotlib
 tabulate
-
-# ----------------------------------------------------------------------
+torch
+tokenizers
