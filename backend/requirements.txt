@@ -1,0 +1,18 @@
+# Back-end runtime dependencies - every version pinned exactly.
+# Tested with Python 3.12 and 3.14.
+#   python -m pip install -r requirements.txt
+
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn==0.52.1
+pydantic==2.13.4
+pydantic-settings==2.16.1
+
+numpy==2.4.4
+torch==2.13.0
+tokenizers==0.22.2
+spacy==3.8.16
+
+# spaCy's English model, pinned to an exact release wheel so `spacy download`
+# (which always fetches the latest compatible version) is not needed.
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl

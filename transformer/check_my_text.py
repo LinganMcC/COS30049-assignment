@@ -9,14 +9,19 @@ Does exactly what the website will do:
     score each sentence -> aggregate into a document score + confidence range
 """
 import sys
+from pathlib import Path
 
 import torch
 from tokenizers import Tokenizer
 
-from sentence_splitter import split_sentences
+# This file lives in transformer/, so add the repo root and this folder to the
+# import path - then it works no matter which folder you run it from.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path[:0] = [str(REPO_ROOT), str(REPO_ROOT / 'transformer')]
+
+from Preprocess.sentence_splitter import split_sentences
 from train_transformer import (TransformerClassifier, encode_sentences, predict_sentences,
                                aggregate_document, likelihood_band, count_words, MIN_WORDS, PAD)
-
 MODEL_DIR = 'results/transformer'
 
 

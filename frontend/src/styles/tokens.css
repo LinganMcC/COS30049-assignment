@@ -1,0 +1,57 @@
+/* Design tokens: the one colour scheme, type scale and spacing for the whole app.
+   Every text colour below is at least 4.5:1 against the surface it sits on (WCAG AA). */
+:root {
+  /* Neutrals */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-muted: #eef0f4;
+  --border: #d5d9e0;
+  --text: #171c26;
+  --text-muted: #4f5868;
+
+  /* Brand */
+  --primary: #3346d3;
+  --primary-hover: #2636b0;
+  --primary-soft: #e7eafc;
+  --focus: #f5a524;
+
+  /* Status */
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --info-soft: #e7eafc;
+
+  /* Likelihood bands: strong = bars, text, borders; soft = sentence highlight */
+  --band-human: #0f7a55;
+  --band-human-soft: #d4f1e5;
+  --band-possibly: #8a6100;
+  --band-possibly-soft: #fbefc6;
+  --band-likely: #c2510b;
+  --band-likely-soft: #fde0c8;
+  --band-very: #b42318;
+  --band-very-soft: #f9d3d0;
+  --band-unscored: #6b7280;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+  --text-hero: clamp(3rem, 9vw, 4.5rem);
+
+  /* Spacing (4px grid) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 1px 3px rgb(16 24 40 / 0.08);
+  --content-width: 1120px;
+}

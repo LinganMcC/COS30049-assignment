@@ -105,3 +105,15 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ============================================================
+# ASSIGNMENT 3 WEB APPLICATION
+# ============================================================
+
+# The deployed model files ARE committed (the spec wants them in backend/)
+!backend/model/*.pt
+
+node_modules/
+frontend/dist/
+.env
+!.env.example

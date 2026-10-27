@@ -1,511 +1,268 @@
-# COS30049 Assignment 2 — AI-Generated Content Detection
+# AI-Generated Content Detector — COS30049 Assignment 3
 
-This repository contains the final machine-learning work for COS30049 Assignment 2:
+A full-stack web application that estimates how likely a piece of writing is to be
+AI-generated, **sentence by sentence**, with an overall score and a confidence range.
+React front end, FastAPI back end, and a transformer trained from scratch in Assignment 2.
 
-- DRCAT + HC3 preprocessing and transformation
-- leakage-safe DRCAT TRAIN / VALIDATION / TEST splitting
-- HC3 external challenge set
-- spaCy sentence segmentation
-- 15 interpretable stylometric / POS features
-- Logistic Regression baseline
-- K-Means clustering within a single class
-- Transformer encoder trained from scratch
-- internal DRCAT evaluation and external HC3 evaluation
+**Who it is for:** teachers, editors and moderators who need to decide whether to look
+more closely at a piece of writing. It highlights *which* sentences look machine-written,
+so the user can review those passages themselves instead of trusting one opaque number.
 
-The final prediction model reported in the assignment is the Transformer. Logistic Regression is retained as an interpretable baseline, while K-Means is used for unsupervised within-class analysis.
+> Assignment 2 (data, features, model training) is documented in
+> [README-assignment2.md](README-assignment2.md).
 
 ---
 
-## 1. Environment setup with Conda
+## 1. Running the application
 
-Run commands from the project root unless stated otherwise.
+Needs **Python 3.12+** and **Node.js 20.19+ or 22.12+**. Run the back end and the
+front end in two terminals, starting from the repository root.
+
+### Back end (http://localhost:8000)
 
 ```bash
-conda create -n cos30049-ai-detection python=3.12 pip -y
-conda activate cos30049-ai-detection
-
-python -m pip install --upgrade pip
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
-python -m spacy download en_core_web_sm
+cp .env.example .env               # optional - every setting has a safe default
+uvicorn app.main:app --port 8000 --no-server-header
 ```
 
-To leave the environment:
+The first start checks the model's SHA-256 and loads it once (a few seconds).
+API documentation: **http://localhost:8000/docs**
+
+### Front end (http://localhost:5173)
 
 ```bash
-conda deactivate
+cd frontend
+npm ci                             # installs the exact versions in package-lock.json
+cp .env.example .env               # optional - defaults to http://localhost:8000
+npm run dev
 ```
 
-A GPU is optional. PyTorch will use CUDA automatically when a compatible NVIDIA GPU is available; otherwise the Transformer can run on CPU.
+Open **http://localhost:5173**. To serve the production build (with the strict
+Content-Security-Policy) use `npm run build && npm run preview` instead.
 
----
+### Tests
 
-## 2. Submitted processed datasets
-
-The assignment ZIP is intended to include already-processed data so the marker does **not** need to redownload DRCAT or HC3 just to inspect or reproduce the final model work.
-
-Recommended submitted data:
-
-```text
-data/
-├── processed/
-│   └── unified_documents.csv
-│
-├── sentences/
-│   ├── drcat_train_sentences.csv
-│   ├── drcat_validation_sentences.csv
-│   ├── drcat_test_sentences.csv
-│   └── hc3_external_test_sentences.csv
-│
-└── features/
-    ├── drcat_train_final_sentence_features.csv
-    ├── drcat_validation_final_sentence_features.csv
-    ├── drcat_test_final_sentence_features.csv
-    └── hc3_external_test_final_sentence_features.csv
-```
-
-### Fastest marking path
-
-If the sentence CSVs and feature CSVs are already included:
-
-- **Transformer:** use the submitted sentence CSVs directly.
-- **Logistic Regression:** use the submitted final feature CSVs directly.
-- **K-Means:** use `drcat_train_final_sentence_features.csv` directly.
-- Preprocessing and feature extraction only need to be rerun if full reproduction from the raw sources is desired.
-
-`unified_documents.csv` is included as transformation/audit evidence showing the common schema created from the different DRCAT and HC3 formats. It is not the file used directly to train the final models.
-
-Expected counts used in the report:
-
-| Split | Documents | Sentences |
-|---|---:|---:|
-| DRCAT TRAIN | 31,119 | 592,757 |
-| DRCAT VALIDATION | 7,133 | 158,996 |
-| DRCAT TEST | 6,612 | 151,878 |
-| HC3 external test | 2,000 | 14,752 |
-
-The sentence labels are inherited from the source document labels, recorded with:
-
-```text
-label_origin = document_inherited
+```bash
+cd backend
+python -m pip install -r requirements-dev.txt
+python -m pytest
 ```
 
 ---
 
-## 3. Rebuild the processed datasets from raw data (optional)
+## 2. Architecture
 
-This section is optional if the processed data above is already supplied.
+```mermaid
+flowchart LR
+    U[User] -->|types text| FE
 
-### 3.1 Raw DRCAT
+    subgraph FE["React front end :5173"]
+        F["TextInputForm<br/>validates length"] --> C["api/client.js"]
+        C --> R["ResultSummary · HighlightedText<br/>SentenceChart · SessionChart"]
+    end
 
-Place the DAIGT V2 / DRCAT CSV at:
+    C -->|POST /api/analyse JSON| MW
+    C -->|GET /api/config| MW
 
-```text
-data/raw/train_v2_drcat_02.csv
+    subgraph BE["FastAPI back end :8000"]
+        MW["Security headers → CORS → body limit"] --> V["Pydantic AnalyseRequest"]
+        V --> G["InferenceGate<br/>bounded thread pool, 503 when full"]
+        G --> N
+        subgraph S["DetectorService - loaded once at start-up"]
+            N["normalise<br/>NFKC · strip invisible · confusables"] --> SP["spaCy sentence split<br/>drop sentences under 5 words"]
+            SP --> T["tokenizer + transformer<br/>P(AI) per sentence"]
+            T --> A["aggregate<br/>mean ± 95% range"]
+        end
+        E["errors.py<br/>one JSON error format"]
+    end
+
+    M[("model/best_model.pt<br/>tokenizer.json<br/>SHA256SUMS")] -. "hash checked, weights_only load" .-> N
+    A -->|AnalyseResponse JSON| C
 ```
 
-### 3.2 Download HC3
+**One request, end to end**
 
-```bash
-python Preprocess/download_hc3.py --out data/raw/hc3_all.jsonl
-```
+1. `TextInputForm` checks the text is non-empty, ≤ 1,000 words and ≤ 8,000 characters
+   (usability only), then `api/client.js` sends `POST /api/analyse {"text": "..."}`.
+2. Middleware adds security headers, enforces CORS, and rejects bodies over 32 KB (413).
+3. `AnalyseRequest` (Pydantic) enforces the same limits for real (422 on failure).
+4. `InferenceGate` runs the model on a worker thread, or returns 503 if the server is full.
+5. `DetectorService.analyse` normalises the text, splits it into sentences, scores every
+   sentence of 5+ words, and combines them into a document score and range.
+6. The response (`AnalyseResponse`) goes back to the front end, which shows the score,
+   highlights each sentence by band, and updates both charts.
+7. Any failure at any step is returned as `{"error": {"code", "message", "details"}}`.
 
-### 3.3 Preprocess both sources
+### Folder layout
 
-```bash
-python Preprocess/preprocess.py \
-  --drcat data/raw/train_v2_drcat_02.csv \
-  --hc3 data/raw/hc3_all.jsonl \
-  --out-dir data/processed
-```
+| Folder | Contents |
+|---|---|
+| `backend/app/` | `main.py` (wiring), `config.py`, `schemas.py`, `errors.py` |
+| `backend/app/routes/` | `analyse.py` (POST), `meta.py` (GET health, config) |
+| `backend/app/ml/` | inference-only copy of the model, sentence rules, normalisation, `DetectorService` |
+| `backend/app/security/` | model hash check, body limit, inference gate, security headers |
+| `backend/model/` | `best_model.pt`, `tokenizer.json`, `SHA256SUMS` |
+| `frontend/src/` | `pages/`, `components/`, `api/client.js`, `styles/tokens.css` |
+| `security/` | attack scripts, audit reports and measured results |
 
-This creates the common schema, leakage-safe DRCAT document partitions, the balanced HC3 external test, transformation examples, and a preprocessing report.
+### API
 
-### 3.4 Sentence splitting
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/analyse` | Score a text. 200, or 413 / 422 / 503 / 500 in the shared error format |
+| `GET` | `/api/config` | Input limits and score bands, so front-end validation matches the back end |
+| `GET` | `/api/health` | Liveness check that never touches the model (used in the DoS demo) |
 
-```bash
-python Preprocess/sentence_splitter.py \
-  --processed-dir data/processed \
-  --out-dir data/sentences
-```
-
-The final sentence splitter uses spaCy `en_core_web_sm`.
+Every endpoint has a description and example request/response at `/docs`.
 
 ---
 
-## 4. Build the final 15-feature tables
+## 3. Pinned dependencies
 
-Skip this section if the four final feature CSVs are already included.
+**Back end** (`backend/requirements.txt`): fastapi 0.141.1, starlette 1.6.0,
+uvicorn 0.52.1, pydantic 2.13.4, pydantic-settings 2.16.1, numpy 2.4.4, torch 2.13.0,
+tokenizers 0.22.2, spacy 3.8.16, en_core_web_sm 3.8.0 (exact wheel URL).
+Dev only (`requirements-dev.txt`): pytest 9.1.1, httpx 0.28.1, pandas 2.3.3, pip-audit 2.10.0.
 
-```bash
-python Feature_extraction/build_final_sentence_feature_table.py \
-  --input data/sentences/drcat_train_sentences.csv \
-  --output data/features/drcat_train_final_sentence_features.csv
-
-python Feature_extraction/build_final_sentence_feature_table.py \
-  --input data/sentences/drcat_validation_sentences.csv \
-  --output data/features/drcat_validation_final_sentence_features.csv
-
-python Feature_extraction/build_final_sentence_feature_table.py \
-  --input data/sentences/drcat_test_sentences.csv \
-  --output data/features/drcat_test_final_sentence_features.csv
-
-python Feature_extraction/build_final_sentence_feature_table.py \
-  --input data/sentences/hc3_external_test_sentences.csv \
-  --output data/features/hc3_external_test_final_sentence_features.csv
-```
-
-Final features:
-
-```text
-n_words
-long_word_ratio
-func_word_ratio
-unique_word_ratio
-comma_rate
-exclaim
-apostrophe_rate
-starts_with_transition
-rel_len_deviation
-noun_ratio
-adjective_ratio
-adverb_ratio
-pronoun_ratio
-auxiliary_ratio
-conjunction_ratio
-```
-
-Metadata columns such as `document_id`, `group_key`, `source_dataset`, `domain`, `generator`, and `label_origin` are retained for grouping/auditing but are not predictive model features.
+**Front end** (`frontend/package.json`, exact versions, plus `package-lock.json`):
+react 19.3.0, react-dom 19.3.0, react-router-dom 7.18.4, recharts 3.10.1,
+vite 8.3.4, @vitejs/plugin-react 6.1.2.
 
 ---
 
-## 5. Logistic Regression baseline
+## 4. Threat model
 
-The Logistic Regression baseline uses the four final feature tables.
+**Who would attack it?** Mainly people whose AI-written text is being checked: students
+submitting essays, content farms posting reviews, or anyone running an influence
+campaign who needs text to pass as human. Also anyone who wants to knock the service
+over or work out how it decides.
 
-From the project root:
+**What do they want?**
+1. A false "Human" verdict on AI-generated text (evasion).
+2. To learn the model's behaviour by probing it repeatedly, so they can tune text until it passes.
+3. To make the detector unavailable to everyone else (denial of service).
 
-```bash
-cd logistic_regression
-```
+**What can they actually do?** They can send any HTTP request straight to the API with
+curl or a script, bypassing every front-end check. That includes oversized or malformed
+bodies, many requests at once, the most expensive input the limits allow, and text
+full of look-alike or invisible Unicode characters that a person cannot see.
 
-### Windows Git Bash
+**Which section 2.7 risks this design exposes**
 
-```bash
-export LR_FEATURE_DIR="../Feature_extraction"
-export LR_DATA_DIR="../data/features"
-export LR_OUTPUT_DIR="outputs"
-```
-
-### 5.1 Development / grouped cross-validation
-
-```bash
-python run_development.py
-```
-
-### 5.2 Fine-tuning around the final selected region
-
-```bash
-python scripts/03_fine_tuning.py \
-  --weighting uniform \
-  --class-balance doc_balanced \
-  --pooling sqrt_length \
-  --c-values 0.0001 0.0003 0.001 0.003 0.01
-```
-
-### 5.3 Freeze the final selected configuration
-
-```bash
-python scripts/04_validate_freeze.py \
-  --weighting uniform \
-  --class-balance doc_balanced \
-  --c 0.0003 \
-  --pooling sqrt_length
-```
-
-### 5.4 Final DRCAT TEST + HC3 evaluation
-
-```bash
-python run_final_evaluation.py
-```
-
-Then return to the project root:
-
-```bash
-cd ..
-```
-
-Frozen model files:
-
-```text
-logistic_regression/outputs/05_frozen_model/
-├── logistic_regression.joblib
-└── frozen_config.json
-```
-
-Reported document-level results:
-
-| Metric | DRCAT TEST | HC3 external |
-|---|---:|---:|
-| Accuracy | 0.888 | 0.606 |
-| Precision | 0.894 | 0.645 |
-| Recall | 0.809 | 0.470 |
-| F1 | 0.850 | 0.544 |
-| ROC-AUC | 0.959 | 0.656 |
-| Average Precision | 0.940 | 0.602 |
+| Risk | Applies? | Why |
+|---|---|---|
+| Denial of service | **Yes** | Running a transformer costs ~10,000× more than sending a request |
+| Misconfiguration / vulnerable dependencies | **Yes** | Every web app; FastAPI and Vite set no security headers by default |
+| Missing rate limiting | Yes | Anyone can probe the detector; partly covered by the inference gate |
+| Unsafe model loading | Yes | `torch.load` uses pickle; covered by the SHA-256 check + `weights_only=True` |
+| SQL injection | No | No database: submitted text is never stored (A1 Req 11) |
+| Unsafe file upload | No | Text is pasted, not uploaded |
+| Command injection | No | The back end never runs a shell command |
+| SSRF | No | The back end never makes an outbound request |
+| Broken access control | No | No user accounts |
 
 ---
 
-## 6. K-Means clustering
+## 5. Defences to be marked (section 2.7)
 
-K-Means is applied **within one class at a time** and does not use the label as a clustering feature.
+### 5.1 Denial of service — Advanced
 
-The final script is:
+*Attack:* inference is slow, so (a) if it ran inside the `async def` endpoint, one
+request would block the event loop and freeze every other user, and (b) a burst of
+requests would queue without limit.
 
-```text
-K-Means/k-means_single_class.py
-```
+*Defence* (`backend/app/security/concurrency.py`, `body_limit.py`):
+- inference runs on a pool of `INFERENCE_WORKERS` threads, so the event loop stays free;
+- at most workers + `INFERENCE_QUEUE` analyses are admitted; the rest get **503 + Retry-After** immediately;
+- a per-request timeout returns 503, and the slot is only freed when the work really ends;
+- the cost of any single request is capped: 32 KB body (checked while streaming, so chunked
+  bodies cannot bypass it), 8,000 characters, 1,000 words, 64 tokens per sentence.
 
-It reads:
+*Demo:* `python security/attacks/dos_burst.py --burst 30`, against a server started with
+`DOS_PROTECTION=false` and then with the default settings. First measurement
+(MacBook, 30 concurrent maximum-size requests):
 
-```text
-data/features/drcat_train_final_sentence_features.csv
-```
+| | Without defence | With defence |
+|---|---|---|
+| `/api/health` while busy, worst | 3,570 ms | 10 ms |
+| Burst outcome | 30 × 200, worst 3.6 s | 6 × 200, 24 × 503 within 52 ms |
 
-The current script uses constants near the top:
+*Cost:* under load, some genuine users get a 503 and must retry, and at most
+2 analyses run at once even if the machine could do more.
 
-```python
-CLASS_LABEL = 0   # 0 = Human, 1 = AI
-N_CLUSTERS = 4
-```
+### 5.2 Misconfiguration and vulnerable dependencies — Intermediate
 
-### Reproduce the Human clustering
-
-Set:
-
-```python
-CLASS_LABEL = 0
-```
-
-then run from the project root:
-
-```bash
-python "K-Means/k-means_single_class.py"
-```
-
-### Reproduce the AI clustering
-
-Set:
-
-```python
-CLASS_LABEL = 1
-```
-
-and run the same command again:
-
-```bash
-python "K-Means/k-means_single_class.py"
-```
-
-The script generates the cluster summary and serialises the fitted scaler and K-Means model:
-
-```text
-cluster_summary.csv
-scaler_single_class.joblib
-kmeans_single_class.joblib
-```
-
-Because the filenames are reused, preserve/rename the Human outputs before rerunning the script for AI (or vice versa) if both fitted versions are required.
-
-The report interprets clusters using:
-
-- cluster sizes;
-- feature means compared with the class-wide mean;
-- the most distinctive features in standard-deviation units;
-- features that are unusually often zero;
-- representative sentences near each cluster centre.
-
-K-Means is an unsupervised analysis model and is not used as the final end-user classifier.
+*Defence:* security headers on every response (`backend/app/security/headers.py`,
+`frontend/vite.config.js`), CORS limited to the front end's exact origin, `/docs` can be
+turned off (`ENABLE_DOCS=false`), no server banner (`--no-server-header`), errors never
+expose stack traces, model loaded with `weights_only=True` after a hash check, exact pinned
+versions. *Evidence:* `pip-audit`, `npm audit` and OWASP ZAP reports before and after,
+in `security/audits/` (see its README for the commands).
 
 ---
 
-## 7. Transformer encoder — final prediction model
+## 6. Advanced security (section 2.8): detection evasion
 
-The Transformer is trained from scratch and learns a byte-level BPE vocabulary using DRCAT TRAIN only.
+*Attack* (`security/attacks/evasion_attack.py`): perturb AI essays the detector catches
+so they read the same but look different to the model: Cyrillic/Greek homoglyphs,
+zero-width characters, fullwidth letters, at rates from 10% to 100% of letters.
 
-Train/evaluate from the project root:
+*Defence* (`backend/app/ml/normalise.py`): before splitting, apply NFKC, remove invisible
+format characters, and map confusable letters to Latin (Unicode Consortium, n.d.-a; n.d.-b).
+The number of characters changed is shown to the user.
 
-```bash
-python transformer/train_transformer.py \
-  --sentence-dir data/sentences \
-  --output-dir results/transformer
-```
+*Measurement:* evasion success rate = share of caught essays that drop to ≤ 50% (or get
+no score at all), measured with normalisation off and on, over the same perturbed texts.
 
-Default final settings:
+**Status:** TODO — run on 300 essays and record the results table here. A first run on
+40 essays showed that simple perturbations raise the score instead of lowering it, so the
+attack needs to be made adaptive. See `security/results/`.
 
-```text
-BPE vocabulary     = 8,000
-max tokens         = 64
-encoder layers     = 4
-attention heads    = 4
-embedding size     = 256
-feed-forward size  = 1,024
-dropout            = 0.1
-optimizer          = AdamW
-learning rate      = 3e-4
-batch size         = 128
-epochs             = 5
-random seed        = 42
-minimum sentence   = 5 words
-```
-
-The training script:
-
-1. trains the tokenizer on DRCAT TRAIN only;
-2. trains the Transformer;
-3. keeps the epoch with the best validation sentence ROC-AUC;
-4. selects sentence/document thresholds using VALIDATION only;
-5. evaluates the frozen model on DRCAT TEST and HC3;
-6. saves final prediction/result files.
-
-Main output files include:
-
-```text
-results/transformer/
-├── best_model.pt
-├── tokenizer.json
-├── transformer_comparison.csv
-├── test_sentence_predictions.csv
-├── test_document_predictions.csv
-├── hc3_external_sentence_predictions.csv
-└── hc3_external_document_predictions.csv
-```
-
-Reported document-level results:
-
-| Metric | LR DRCAT | Transformer DRCAT | LR HC3 | Transformer HC3 |
-|---|---:|---:|---:|---:|
-| Accuracy | 0.888 | 0.984 | 0.606 | 0.842 |
-| Precision | 0.894 | 0.974 | 0.645 | 0.888 |
-| Recall | 0.809 | 0.986 | 0.470 | 0.783 |
-| F1 | 0.850 | 0.980 | 0.544 | 0.832 |
-| ROC-AUC | 0.959 | 0.998 | 0.656 | 0.932 |
-
-### Predict new text
-
-The repository contains:
-
-```text
-transformer/check_my_text.py
-```
-
-Create a text file such as:
-
-```text
-sample.txt
-```
-
-Then run the prediction script according to the import paths in the submitted repository.
-
-If the current repository version supports direct execution from the project root:
-
-```bash
-python transformer/check_my_text.py sample.txt
-```
-
-The script loads the submitted Transformer checkpoint and tokenizer, splits the input into sentences, excludes sentences under five words, prints sentence-level AI probabilities, and aggregates them into a document score and confidence range.
+*Cost:* genuine Cyrillic or Greek text is converted to Latin look-alikes, so the
+detector only suits English (already its stated scope). Normalisation adds < 1 ms per request.
 
 ---
 
-## 8. TRAIN-only feature analysis used in the report
+## 7. Security hygiene (section 2.3)
 
-```bash
-python analyze_features_for_report.py \
-  --input data/features/drcat_train_final_sentence_features.csv \
-  --output-dir results/feature_analysis/report
-```
-
-This produces TRAIN-only feature summaries, Cohen's d effect sizes and Pearson-correlation analysis without using VALIDATION, TEST or HC3 to choose features.
-
----
-
-## 9. Fast reproduction path for markers
-
-If all processed datasets and final artifacts are supplied:
-
-1. Create the Conda environment.
-2. Install `requirements.txt`.
-3. Install `en_core_web_sm`.
-4. Use `data/features/*.csv` directly for Logistic Regression and K-Means.
-5. Use `data/sentences/*.csv` directly for Transformer training/evaluation.
-6. Inspect the supplied frozen Logistic Regression model and Transformer result/model files.
-7. Raw DRCAT/HC3 downloading and preprocessing are optional.
-
-This is the recommended marking path because the assignment submission already includes the processed data used by the final machine-learning work.
+| Requirement | How it is met |
+|---|---|
+| Input never rendered as HTML | Sentences are React text children; no `dangerouslySetInnerHTML` anywhere |
+| Size limits on the back end | 32 KB body (middleware), 8,000 characters and 1,000 words (Pydantic) |
+| CORS only allows our front end | `allow_origins=[FRONTEND_ORIGIN]`, GET/POST only |
+| No secrets in source | All configuration via environment / `.env` (git-ignored); the app has no secrets |
 
 ---
 
-## 10. What should be included in the Canvas ZIP
+## 8. Known limitations and next steps
 
-Recommended:
-
-```text
-README.md
-requirements.txt
-
-Preprocess/
-Feature_extraction/
-logistic_regression/
-K-Means/
-transformer/
-analyze_features_for_report.py
-
-data/processed/unified_documents.csv
-
-data/sentences/
-├── drcat_train_sentences.csv
-├── drcat_validation_sentences.csv
-├── drcat_test_sentences.csv
-└── hc3_external_test_sentences.csv
-
-data/features/
-├── drcat_train_final_sentence_features.csv
-├── drcat_validation_final_sentence_features.csv
-├── drcat_test_final_sentence_features.csv
-└── hc3_external_test_final_sentence_features.csv
-
-logistic_regression/outputs/05_frozen_model/
-├── logistic_regression.joblib
-└── frozen_config.json
-
-results/transformer/
-├── best_model.pt              # include if this is the checkpoint used for the reported results
-├── tokenizer.json
-└── transformer_comparison.csv
-
-K-Means report/result files actually used in the report
-```
-
-For K-Means, include any saved scaler/K-Means `.joblib` files if they were generated and retained in the final project. If the final repository only retains the script and report outputs, do not invent additional artifacts; the clustering can be reproduced directly from the submitted TRAIN feature CSV.
-
-Do **not** include unnecessary files such as:
-
-```text
-.venv/
-venv/
-__pycache__/
-*.pyc
-.git/
-large obsolete checkpoints
-duplicate experimental outputs
-raw downloaded datasets unless intentionally required
-```
+- TODO: complete before submission.
 
 ---
 
-## 11. GitHub versus Canvas
+## 9. References
 
-GitHub is used for version control. The Canvas ZIP is the actual assessment package.
+Ramírez, S. (n.d.) *FastAPI documentation*. Available at: https://fastapi.tiangolo.com/ (Accessed: 27 October 2026).
 
-Large processed datasets, generated outputs, and binary model files may remain ignored on GitHub if that is your repository policy. However, the **Canvas ZIP should contain the processed model inputs and the final artifacts actually needed to inspect/reproduce the submitted models**, even when those files are excluded by `.gitignore`.
+OWASP Foundation (2021) *OWASP Top 10:2021*. Available at: https://owasp.org/Top10/ (Accessed: 27 October 2026).
 
-Do not create the Canvas ZIP by downloading the GitHub repository if ignored model/data files are required. Build the ZIP from the final local project folder.
+Unicode Consortium (n.d.-a) *Unicode Standard Annex #15: Unicode normalization forms*. Available at: https://www.unicode.org/reports/tr15/ (Accessed: 27 October 2026).
+
+Unicode Consortium (n.d.-b) *Unicode Technical Standard #39: Unicode security mechanisms*. Available at: https://www.unicode.org/reports/tr39/ (Accessed: 27 October 2026).
+
+Weber-Wulff, D. et al. (2023) 'Testing of detection tools for AI-generated text', *International Journal for Educational Integrity*, 19(1), article 26.
+
+TODO: add the datasets (DAIGT V2 / DRCAT, HC3) and any other sources used.
+
+---
+
+## 10. Use of generative AI
+
+TODO: the team must describe, in its own words, how generative AI was used. For example:
+Claude (Anthropic) was used through Claude Code to scaffold the back-end and front-end
+structure, draft security middleware and attack scripts, and draft parts of this README.
+The team then reviewed, tested and modified the code, and is responsible for it.

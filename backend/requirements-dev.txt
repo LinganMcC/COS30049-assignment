@@ -1,0 +1,6 @@
+# Tests, attack scripts and audits - not needed to run the app.
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1
+pandas==2.3.3
+pip-audit==2.10.0
