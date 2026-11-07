@@ -21,3 +21,19 @@ What can they actually do to it?
 - Command injection
 - Model file can replaced with a malicious file or a model that would incorrectly classify input text
 
+## Security Defences (7 Points Total)
+### Misconfiguration and Vulnerable Dependencies (Intermediate/3 Points)
+Reasoning
+- Misconfigurations leave the risk of possible XSS attacks due to misconfigured security headers
+- Including no input length cap or rate limit opens the risk of request flooding or model probing
+- Model tampering can be avoided with proper configurations and using model libraries that are up-to-date
+
+Cost
+- Limiting input length and rate limiting can hinder legitimate users trying to use the website. However, The length limit should cover most standard essay lengths and many other models limit rate as well and it is necessary to prevent model probing and request flooding
+
+### Denial of Service (Advanced/4 Points)
+Reasoning
+- Prevents resource exhaustion caused by request flooding and model probing with large input text
+
+Cost
+- Legitimate users who are trying to use the tool may meet the 503 error due to a large burst of requests, this is unavoidable to defend against 
