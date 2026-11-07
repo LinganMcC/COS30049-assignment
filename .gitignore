@@ -105,3 +105,12 @@ ENV/
 .idea/
 .DS_Store
 Thumbs.db
+
+
+
+# ============================================================
+# ASSIGNMENT 3 WEB APP
+# ============================================================
+
+# The web app needs the frozen model in the repo so it runs from a clean clone.
+!webapp/backend/model/logistic_regression.joblib
