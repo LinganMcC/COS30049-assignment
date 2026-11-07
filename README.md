@@ -18,8 +18,8 @@ What are they trying to achieve?
 What can they actually do to it?
 - A user can submit their text multiple times with different variations until it passes as human
 - Flood the endpoint with requests by inputting massive text
-- Command injection
-- Model file can replaced with a malicious file or a model that would incorrectly classify input text
+- Script injection that replaces the models output with its own
+- Model file can be replaced with a malicious file or a model that would incorrectly classify input text
 
 ## Security Defences (7 Points Total)
 ### Misconfiguration and Vulnerable Dependencies (Intermediate/3 Points)
@@ -37,3 +37,13 @@ Reasoning
 
 Cost
 - Legitimate users who are trying to use the tool may meet the 503 error due to a large burst of requests, this is unavoidable to defend against 
+
+### Risks not Included
+SQL Injection
+- We are not using an SQL databases
+
+Broken Access Control
+- We are not implementing different user accounts
+
+Unsafe File Upload
+- We are only allowing pasted/typed text, no file upload option
