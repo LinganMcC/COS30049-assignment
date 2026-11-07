@@ -18,15 +18,15 @@ What are they trying to achieve?
 What can they actually do to it?
 - A user can submit their text multiple times with different variations until it passes as human
 - Flood the endpoint with requests by inputting massive text
-- Script injection that replaces the models output with its own
-- Model file can be replaced with a malicious file or a model that would incorrectly classify input text
+- XSS Script injection that replaces the models output with its own output
+- Model file can be replaced with a malicious file or a model that could alter the output result or deploy harmful script
 
 ## Security Defences (7 Points Total)
 ### Misconfiguration and Vulnerable Dependencies (Intermediate/3 Points)
 Reasoning
-- Misconfigurations leave the risk of possible XSS attacks due to misconfigured security headers
+- Misconfigurations such as missing security headers leave the risk of possible XSS attacks
 - Including no input length cap or rate limit opens the risk of request flooding or model probing
-- Model tampering can be avoided with proper configurations and using model libraries that are up-to-date
+- Model tampering can be avoided with proper configurations such as disabling debug mode and using libraries that are up-to-date with security patches
 
 Cost
 - Limiting input length and rate limiting can hinder legitimate users trying to use the website. However, The length limit should cover most standard essay lengths and many other models limit rate as well and it is necessary to prevent model probing and request flooding
