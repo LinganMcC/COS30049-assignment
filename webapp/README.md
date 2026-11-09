@@ -293,6 +293,12 @@ What we found and fixed:
 | Server header reveals the software | review | `server_header=False` |
 | Interactive docs always on | review | `SHOW_DOCS=false` turns off `/docs` and `/openapi.json` in production |
 | CORS was applied after the body-size check, so a 413 reached the browser without a CORS header and showed as a network error | our own test | CORS is now the outermost middleware |
+| Content Security Policy (CSP) Header Not Set | OWASP ZAP | 
+| Missing Anti-clickjacking Header | OWASP ZAP | OWASP ZAP | 
+| X-Content-Type-Options Header Missing | OWASP ZAP | 
+| HTTP Only Site | OWASP ZAP | 
+| Information Disclosure - Suspicious Comments: Response appers to contain suspicious comments which may help an attacker | OWASP ZAP | The comments marked as suspicious were removed |
+| Timestamp Disclosure - Unix | OWASP ZAP | No changes. It was a false positive and the timestamp it marked was a necessary hash, not a timestamp
 
 Both `npm audit` and `pip-audit -r requirements.txt` report **0 known vulnerabilities** (checked on
 Python 3.15). `en_core_web_sm` is not on PyPI, so pip-audit cannot check it; it is pinned to an exact
