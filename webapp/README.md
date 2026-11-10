@@ -255,8 +255,7 @@ ZAP Dev Team n.d., *Alerts*, ZAP desktop user guide, viewed 11 November 2026. [Z
 
 ## 11. Generative AI statement
 
-We used Anthropic's Claude to help draft the web application, tests and security evaluation scripts using our Assignment 2 code, the Assignment 3 brief and the unit materials. Claude also generated the ten AI passages used in the detection-evasion evaluation. The human control passages came from the labelled DRCAT dataset. The benchmark file records the origin of each group of samples.
+We used Anthropic's Claude to help draft the web application, tests and security evaluation scripts using our Assignment 2 code, the Assignment 3 brief and the unit materials. The human control passages came from the labelled DRCAT dataset. The benchmark file records the origin of each group of samples.
 
 The project uses our frozen A2 classifier and its evaluation files. Our documented checks include comparing features and predictions against A2 on 16 essays and two accented passages, and comparing local defence-off and defence-on runs under the same conditions. The scripts and tests linked above show how those behaviours are checked.
 
-OpenAI's ChatGPT assisted with reviewing the project against the rubric, checking the A2 artefacts against the files packaged with the app, and revising this README and its references. The security measurements in §§7–8 are the team's recorded results. The outstanding ZAP evidence is identified in §7B.
