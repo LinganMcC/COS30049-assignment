@@ -68,6 +68,14 @@ export default function DetectPage() {
     setStatus('idle')
   }
 
+  // An input error describes the text that was submitted, so it goes when the text changes.
+  function handleTextChange(value) {
+    setText(value)
+    if (error?.status === 422) {
+      setError(null)
+      setStatus(check ? 'success' : 'idle')
+    }
+  }
   const fieldError = error?.status === 422 ? error.message : null
   const stale = Boolean(check) && text !== check.text
   const result = check?.result
@@ -86,11 +94,12 @@ export default function DetectPage() {
         <div className="workspace__main">
           <TextInputForm
             text={text}
-            onTextChange={setText}
+            onTextChange={handleTextChange}
             onSubmit={runCheck}
             onClear={clearAll}
             loading={status === 'loading'}
             serverError={fieldError}
+            hasHistory={history.items.length > 0}
           />
         </div>
 

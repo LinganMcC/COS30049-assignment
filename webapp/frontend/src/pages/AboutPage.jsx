@@ -29,7 +29,7 @@ export default function AboutPage() {
 
       <h2>From your text to a verdict</h2>
       <ol className="steps">
-        <li><strong>Clean.</strong> Invisible characters and look-alike letters from other alphabets are removed (normal accents stay), then spacing and stray HTML are tidied exactly as they were for the training data.</li>
+        <li><strong>Clean.</strong> Invisible characters and look-alike letters from other alphabets are removed (accented letters stored as single characters stay; a separate accent mark after a plain letter is removed), then spacing and stray HTML are tidied exactly as they were for the training data.</li>
         <li><strong>Split.</strong> spaCy divides the text into sentences. Fragments without letters are shown but not scored.</li>
         <li><strong>Measure.</strong> Each sentence gets 15 style measurements.</li>
         <li><strong>Score.</strong> A Logistic Regression model turns the measurements into a probability for each sentence.</li>

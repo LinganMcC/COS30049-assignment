@@ -134,6 +134,42 @@ def test_unexpected_error_is_generic(client, monkeypatch):
     assert_error_shape(r, 500, "internal_error")
     assert "secret" not in r.text
 
+def test_unexpected_error_reaches_the_browser(client, monkeypatch):
+    """The 500 must carry the CORS header, or the browser hides it from the page."""
+    def boom(*args, **kwargs):
+        raise RuntimeError("internal detail /secret/path")
+
+    monkeypatch.setattr(client.app.state.detector, "analyse", boom)
+    r = client.post("/api/detect", json={"text": AI_TEXT}, headers={"Origin": "http://localhost:5173"})
+    assert_error_shape(r, 500, "internal_error")
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:5173"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert r.headers["cache-control"] == "no-store"
+    assert "secret" not in r.text
+
+
+def test_rejected_preflight_uses_the_error_format(client):
+    evil = client.options(
+        "/api/detect",
+        headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
+    )
+    assert_error_shape(evil, 400, "cors_rejected")
+    assert "access-control-allow-origin" not in evil.headers
+
+    bad_method = client.options(
+        "/api/detect",
+        headers={"Origin": "http://localhost:5173", "Access-Control-Request-Method": "DELETE"},
+    )
+    assert_error_shape(bad_method, 400, "cors_rejected")
+
+
+def test_docs_show_examples_and_400(client):
+    spec = client.get("/openapi.json").json()
+    responses = spec["paths"]["/api/detect"]["post"]["responses"]
+    assert "400" in responses
+    assert responses["400"]["content"]["application/json"]["example"]["error"]["code"] == "invalid_json"
+    for name in ("DetectResponse", "ModelInfoResponse", "HealthResponse"):
+        assert spec["components"]["schemas"][name]["examples"]
 
 def test_model_info(client):
     r = client.get("/api/model-info")

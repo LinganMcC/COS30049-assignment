@@ -22,14 +22,46 @@ from ..schemas import (
 
 router = APIRouter(prefix="/api", tags=["detector"])
 
+def _error_doc(description: str, code: str, message: str, fields: list[dict] | None = None) -> dict:
+    """One documented error response, with an example of the body it really sends."""
+    example = {"error": {"code": code, "message": message, "fields": fields or []}}
+    return {
+        "model": ErrorResponse,
+        "description": description,
+        "content": {"application/json": {"example": example}},
+    }
+
+
+_TOO_SHORT = "Text has 8 words; at least 20 are needed for a meaningful score."
+
 ERRORS = {
-    422: {"model": ErrorResponse, "description": "Input failed validation (too short, too long, wrong field)"},
-    413: {"model": ErrorResponse, "description": "Request body larger than the limit"},
-    503: {"model": ErrorResponse, "description": "Server busy or model unavailable; retry shortly"},
-    500: {"model": ErrorResponse, "description": "Unexpected server error (no internal details)"},
+    400: _error_doc(
+        "Request body is not valid JSON",
+        "invalid_json",
+        "Request body is not valid JSON.",
+    ),
+    413: _error_doc(
+        "Request body larger than the limit",
+        "payload_too_large",
+        "Request body is larger than 128 KB.",
+    ),
+    422: _error_doc(
+        "Input failed validation (too short, too long, wrong field)",
+        "validation_error",
+        _TOO_SHORT,
+        [{"field": "text", "message": _TOO_SHORT}],
+    ),
+    500: _error_doc(
+        "Unexpected server error (no internal details)",
+        "internal_error",
+        "Something went wrong on our side. Please try again.",
+    ),
+    503: _error_doc(
+        "Server busy or model unavailable; retry shortly",
+        "busy",
+        "The detector is busy with other checks. Please try again in a few seconds.",
+    ),
 }
-
-
 def _detector(request: Request):
     detector = getattr(request.app.state, "detector", None)
     if detector is None:

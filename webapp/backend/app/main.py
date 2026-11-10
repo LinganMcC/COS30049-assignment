@@ -11,15 +11,15 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .errors import register_error_handlers
+from .errors import error_response, register_error_handlers
 from .ml.detector import Detector
 from .routers import detect
 from .security import (
     AnalysisGuard,
     BodySizeLimitMiddleware,
+    JsonCORSMiddleware,
     SecurityHeadersMiddleware,
 )
 
@@ -71,7 +71,14 @@ def create_app() -> FastAPI:
     async def request_log(request: Request, call_next):
         # Method, path, status and time only. The submitted text is never logged.
         start = time.perf_counter()
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            # Caught HERE, inside the CORS and security-header middleware, so the
+            # 500 leaves with those headers and the front end can read it.
+            # Log type and route only: the exception text could quote user input.
+            logger.error("Unhandled %s on %s %s", type(exc).__name__, request.method, request.url.path)
+            response = error_response(500, "Something went wrong on our side. Please try again.")
         logger.info(
             "%s %s -> %s (%.0f ms)",
             request.method,
@@ -84,7 +91,7 @@ def create_app() -> FastAPI:
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
-        CORSMiddleware,
+        JsonCORSMiddleware,
         allow_origins=[settings.frontend_origin],  # exactly one origin, never "*"
         allow_credentials=False,
         allow_methods=["GET", "POST"],

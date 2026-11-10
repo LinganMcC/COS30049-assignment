@@ -12,7 +12,7 @@ const MAX_FILE_BYTES = 100 * 1024
  * The text box, its live word count, and the actions.
  * Validation runs here first (for usability); the back end checks again (for security).
  */
-export default function TextInputForm({ text, onTextChange, onSubmit, onClear, loading, serverError }) {
+export default function TextInputForm({ text, onTextChange, onSubmit, onClear, loading, serverError, hasHistory }) {
   const id = useId()
   const fileInput = useRef(null)
   const [attempted, setAttempted] = useState(false)
@@ -91,7 +91,7 @@ export default function TextInputForm({ text, onTextChange, onSubmit, onClear, l
         <Button type="submit" variant="contained" size="large" disabled={loading}>
           {loading ? 'Checking…' : 'Check text'}
         </Button>
-        <Button type="button" variant="outlined" onClick={handleClear} disabled={!text && !attempted}>
+        <Button type="button" variant="outlined" onClick={handleClear} disabled={!text && !attempted && !hasHistory}>
           Clear
         </Button>
         <span className="input-form__spacer" />
@@ -99,10 +99,10 @@ export default function TextInputForm({ text, onTextChange, onSubmit, onClear, l
           Open a .txt file
         </Button>
         <input ref={fileInput} type="file" accept=".txt,text/plain" hidden onChange={handleFile} aria-label="Open a text file" />
-        <Button type="button" variant="text" onClick={() => { setAttempted(false); onTextChange(SAMPLES.ai) }}>
+        <Button type="button" variant="text" onClick={() => { setAttempted(false); setFileError(null); onTextChange(SAMPLES.ai) }}>
           AI sample
         </Button>
-        <Button type="button" variant="text" onClick={() => { setAttempted(false); onTextChange(SAMPLES.human) }}>
+        <Button type="button" variant="text" onClick={() => { setAttempted(false); setFileError(null); onTextChange(SAMPLES.human) }}>
           Student sample
         </Button>
       </div>

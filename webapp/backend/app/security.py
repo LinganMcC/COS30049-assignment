@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import threading
 
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .errors import error_response
@@ -98,6 +101,29 @@ class BodySizeLimitMiddleware:
                 raise
             await too_large(scope, receive, send)
 
+class JsonCORSMiddleware(CORSMiddleware):
+    """CORSMiddleware, except a rejected preflight uses the API's JSON error format.
+
+    Starlette answers a disallowed preflight with plain text ("Disallowed CORS
+    origin"). The decision and the CORS headers are left exactly as Starlette
+    made them; only the body changes.
+    """
+
+    def preflight_response(self, request_headers: Headers) -> Response:
+        response = super().preflight_response(request_headers)
+        if response.status_code != 400:
+            return response
+        kept = {
+            name: value
+            for name, value in response.headers.items()
+            if name not in ("content-type", "content-length")
+        }
+        return error_response(
+            400,
+            "This origin, method or header is not allowed to call the API.",
+            code="cors_rejected",
+            headers=kept,
+        )
 
 class SecurityHeadersMiddleware:
     """Standard defensive headers. API responses also forbid caching, because

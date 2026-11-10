@@ -62,6 +62,74 @@ class DetectRequest(BaseModel):
             raise ValueError(f"Text has {words} words; the limit is {_settings.max_words}.")
         return value
 
+DETECT_EXAMPLE = {
+    "label": "ai",
+    "band": "Very likely AI",
+    "score": 0.8669,
+    "range": {"low": 0.7355, "high": 0.9983},
+    "threshold": 0.5,
+    "certainty": "clear",
+    "sentence_count": 3,
+    "word_count": 40,
+    "unscored_fragments": 0,
+    "sentences": [
+        {
+            "index": 0,
+            "text": "Remote work has fundamentally transformed the modern workplace, offering both significant opportunities and notable challenges.",
+            "score": 0.9026,
+            "band": "Very likely AI",
+            "word_count": 15,
+            "toward_ai": [
+                {"feature": "long_word_ratio", "label": "Long words", "value": 0.5333, "contribution": 1.4605},
+                {"feature": "adjective_ratio", "label": "Adjectives", "value": 0.2667, "contribution": 0.5258},
+            ],
+            "toward_human": [
+                {"feature": "func_word_ratio", "label": "Function words", "value": 0.1333, "contribution": -0.1258},
+            ],
+        }
+    ],
+    "passage": [
+        {
+            "text": "Remote work has fundamentally transformed the modern workplace, offering both significant opportunities and notable challenges.",
+            "sentence_index": 0,
+        },
+        {"text": " ", "sentence_index": None},
+    ],
+    "style_summary": [
+        {"feature": "long_word_ratio", "label": "Long words", "value": 0.446, "contribution": 1.059},
+        {"feature": "noun_ratio", "label": "Nouns", "value": 0.3546, "contribution": -0.134},
+    ],
+    "normalisation": {"applied": True, "invisible_removed": 0, "homoglyphs_replaced": 0, "marks_removed": 0},
+}
+
+MODEL_INFO_EXAMPLE = {
+    "name": "Sentence-level Logistic Regression",
+    "version": "db04079c0d91",
+    "threshold": 0.5,
+    "pooling": "sqrt_length",
+    "bands": [
+        {"upper": 0.25, "label": "Human"},
+        {"upper": 0.5, "label": "Possibly AI"},
+        {"upper": 0.75, "label": "Likely AI"},
+        {"upper": 1.0, "label": "Very likely AI"},
+    ],
+    "features": [
+        {
+            "feature": "long_word_ratio",
+            "label": "Long words",
+            "meaning": "Fraction of words with at least 7 characters.",
+            "coefficient": 0.6115,
+            "direction": "ai",
+        }
+    ],
+    "evaluation": {
+        "validation": {"accuracy": 0.8337, "f1": 0.7754, "roc_auc": 0.9144},
+        "drcat_test": {"accuracy": {"estimate": 0.8884, "ci_low": 0.8779, "ci_high": 0.9146}},
+        "hc3_external": {"accuracy": {"estimate": 0.6055, "ci_low": 0.586, "ci_high": 0.6245}},
+    },
+    "limits": {"min_words": 20, "max_words": 1000, "max_chars": 20000},
+}
+
 
 class Factor(BaseModel):
     feature: str = Field(description="Feature id, e.g. long_word_ratio")
@@ -102,6 +170,7 @@ class NormalisationInfo(BaseModel):
 
 
 class DetectResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [DETECT_EXAMPLE]})
     label: Literal["ai", "human"] = Field(description="Verdict at the model's decision threshold")
     band: str = Field(description="Human / Possibly AI / Likely AI / Very likely AI")
     score: float = Field(ge=0, le=1, description="Estimated probability the passage is AI-generated")
@@ -151,6 +220,7 @@ class Limits(BaseModel):
 
 
 class ModelInfoResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [MODEL_INFO_EXAMPLE]})
     name: str
     version: str
     threshold: float
@@ -162,6 +232,8 @@ class ModelInfoResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"examples": [{"status": "ok", "model_loaded": True}]})
+
     status: Literal["ok"]
     model_loaded: bool
 

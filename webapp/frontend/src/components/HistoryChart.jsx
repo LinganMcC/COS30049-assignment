@@ -28,7 +28,10 @@ export default function HistoryChart({ items, currentId }) {
   // Number checks in the order they were made, then filter (numbers stay stable).
   const numbered = useMemo(() => items.map((item, i) => ({ ...item, n: i + 1 })), [items])
   const shown = numbered.filter((it) => filter === 'all' || it.label === filter)
-  const selected = numbered.find((it) => it.id === (selectedId ?? currentId)) || null
+  const selected =
+    shown.find((it) => it.id === selectedId) ??
+    shown.find((it) => it.id === currentId) ??
+    null
 
   const innerW = width - M.left - M.right
   const innerH = HEIGHT - M.top - M.bottom

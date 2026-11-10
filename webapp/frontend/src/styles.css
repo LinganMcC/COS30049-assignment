@@ -166,7 +166,7 @@ h2 { font-family: var(--serif); }
 .chart__head h3 { font-family: var(--serif); font-size: 1.2rem; margin: 0; }
 .chart__sub { color: var(--muted); font-size: 0.9rem; margin: 6px 0 12px; max-width: 75ch; }
 .chart { min-width: 0; }
-.chart__frame { position: relative; width: 100%; min-width: 0; overflow: hidden; padding-top: 4px; }
+.chart__frame { position: relative; width: 100%; min-width: 0; overflow-x: clip; overflow-y: visible; padding-top: 4px; }
 .chart__frame svg { display: block; overflow: visible; max-width: 100%; }
 .chart__controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 .chart__spacer { flex: 1; }

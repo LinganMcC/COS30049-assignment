@@ -6,12 +6,13 @@ const UNCERTAIN_POLE = ink.neutral
 
 /** The verdict: the most prominent thing on screen once a check finishes. */
 export default function ResultSummary({ result, stale }) {
-  const { band, score, range, threshold, certainty, sentences, word_count: words, normalisation } = result
+  const { label, band, score, range, threshold, certainty, sentences, word_count: words, normalisation } = result
   const style = bandStyle[band]
   const flagged = sentences.filter((s) => s.score >= threshold).length
   const tampered = normalisation.invisible_removed + normalisation.homoglyphs_replaced + normalisation.marks_removed
   const uncertain = certainty === 'uncertain'
-  const leans = score >= threshold ? 'AI-generated' : 'human-written'
+  const isAi = label === 'ai'
+  const leans = isAi ? 'AI-generated' : 'human-written'
 
   return (
     <section className={`verdict${stale ? ' verdict--stale' : ''}`} aria-labelledby="verdict-title" aria-live="polite">
@@ -36,7 +37,7 @@ export default function ResultSummary({ result, stale }) {
         Sentence-agreement range {pct(range.low)}–{pct(range.high)}
         {uncertain
           ? `, which crosses the ${pct(threshold)} line, so under this heuristic the result is uncertain.`
-          : `, entirely ${score >= threshold ? 'above' : 'below'} the ${pct(threshold)} line.`}
+          : `, entirely ${isAi ? 'above' : 'below'} the ${pct(threshold)} line.`}
       </p>
       <p className="verdict__note">
         The range widens when there are few sentences or their scores disagree. It is a guide to how
@@ -56,7 +57,8 @@ export default function ResultSummary({ result, stale }) {
           {normalisation.marks_removed === 1 ? '' : 's'}, and replaced {normalisation.homoglyphs_replaced} look-alike
           letter{normalisation.homoglyphs_replaced === 1 ? '' : 's'} from other alphabets. These can come from
           copying text out of some apps, and are also used to hide text from detectors, so the score was
-          calculated without them. Normal accents (é, ü, ệ) are not affected.
+          calculated without them. Accented letters stored as single characters (é, ü, ệ) are kept; an accent
+          stored as a separate mark after a plain letter is removed.
         </Alert>
       )}
 
