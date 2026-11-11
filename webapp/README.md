@@ -54,11 +54,30 @@ npm run dev
 
 | Working directory | Command | What it checks |
 |---|---|---|
-| `backend/`, with the project virtual environment active | `python -m pytest` | The 32 test cases cover API responses, input limits, error handling, model behaviour and security controls. |
+| `backend/`, with the project virtual environment active | `python -m pytest` | The 35 test cases cover API responses, input limits, error handling, model behaviour and security controls. |
 | `backend/`, with the environment active and the API running | `python scripts/measure_latency.py --runs 30` | Times the API round trip for 500-word and 1,000-word passages. |
 | `frontend/` | `npm run lint` and `npm run build` | Runs ESLint and builds the production frontend. |
 
 If running without activating the virtual environment, use the same Python executable as in Terminal 1. The backend requirements pin the listed packages, including the scikit-learn version used to save the classifier. The English spaCy pipeline is pinned to a release wheel.
+
+### Pinned versions
+
+Every dependency is pinned to an exact version, so the app runs the same way on every machine. The full lists are in [backend/requirements.txt](backend/requirements.txt) and [frontend/package.json](frontend/package.json), with the complete frontend tree locked in [frontend/package-lock.json](frontend/package-lock.json).
+
+| Backend (Python 3.15) | Version | Frontend (Node.js) | Version |
+|---|---|---|---|
+| FastAPI | 0.162.0 | React and React DOM | 19.2.0 |
+| Starlette | 1.10.0 | React Router DOM | 7.18.5 |
+| Uvicorn | 0.54.0 | MUI Material | 7.3.4 |
+| Pydantic | 2.14.3 | Emotion (react / styled) | 11.14.0 / 11.14.1 |
+| pydantic-settings | 2.16.2 | D3 | 7.9.0 |
+| scikit-learn | 1.9.1 | Axios | 1.21.0 |
+| NumPy | 2.5.4 | Vite | 7.3.7 |
+| SciPy | 1.18.1 | @vitejs/plugin-react | 5.1.0 |
+| joblib | 1.6.0 | ESLint | 9.38.0 |
+| spaCy / thinc | 3.8.18 / 8.3.14 | Literata / Instrument Sans fonts | 5.2.8 |
+| en_core_web_sm | 3.8.0 (release wheel) | | |
+| pytest / httpx | 9.2.0 / 0.28.1 | | |
 
 ## 2. Architecture and the link to Assignment 2
 
@@ -224,8 +243,6 @@ All **10 original AI passages** scored at or above 0.5 before any edit. A succes
 
 - The classifier was trained on English essays. The external HC3 results in §2 show how much accuracy can fall on another genre. Per-sentence scores also inherit the limitations of essay-level training labels.
 - Each server process maintains its own concurrency counter. A multi-process deployment would need coordinated limits. One client can repeatedly occupy available slots.
-- The current frontend can retain a selected history detail after its point is filtered out. After returning from About, **Clear** can be disabled while session summaries remain. A server validation message can persist during an edit.
-- The OpenAPI page exposes the response schemas. Realistic endpoint-specific success examples and an explicit `400` entry for malformed detection JSON would improve the live documentation. A separate HTTP-layer check observed a generic `500` without the allowed-origin header. The browser-visible error for that path still needs verification on the pinned stack.
 
 ## 10. References
 

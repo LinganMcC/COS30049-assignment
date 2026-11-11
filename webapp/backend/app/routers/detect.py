@@ -140,6 +140,16 @@ async def model_info(request: Request):
     return info
 
 
-@router.get("/health", response_model=HealthResponse, summary="Is the API up and the model loaded?")
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Is the API up and the model loaded?",
+    description=(
+        "Liveness check. Returns `status: ok` whenever the API is running, and "
+        "`model_loaded: true` once the detector has finished loading at start-up. "
+        "Used to confirm the server is ready and, in the denial-of-service demo, to "
+        "show that ordinary requests are still answered while analyses are running."
+    ),
+)
 async def health(request: Request):
     return {"status": "ok", "model_loaded": getattr(request.app.state, "detector", None) is not None}
