@@ -1,397 +1,261 @@
-# Inkprint: AI-generated writing detector
+# Inkprint
 
-COS30049 Computing Technology Innovation Project, Assignment 3. This folder is the web app;
-the Assignment 2 pipeline that produced the model lives in the folders above it.
+**AI-generated writing detector | COS30049 Computing Technology Innovation Project | Assignment 3**
 
-Inkprint takes a passage of English writing and estimates how likely it is to be AI-generated.
-It scores every sentence, shades the passage by score, and reports an overall estimate with a
-range showing how much the sentence scores agree. Underneath is the **Logistic Regression model from our Assignment 2**: 15
-sentence-level style features, sqrt-length pooling and a 0.5 threshold, loaded unchanged.
+Inkprint helps students and educators explore why a passage of English writing resembles the essays in our training data. Paste a passage or open a plain-text file. The app estimates how AI-like the passage reads, highlights individual sentences and shows which writing features influenced each score. The model works best on student essays. A score alone cannot establish authorship.
 
-![Result screen](docs/screenshot-result.png)
-
----
+![Inkprint result screen showing a passage score, a sentence-agreement range and highlighted writing](docs/screenshot-result.png)
 
 ## 1. Run it
 
-You need **Python 3.15** and **Node.js 20.19+ or 22.12+**. Every Python package is pinned to a version
-with a ready-made build for Python 3.15, so nothing has to be compiled. Use two terminals.
+Use **Python 3.15** and **Node.js 20.19+ on the 20.x line, or Node.js 22.12+**. The first installation downloads Python and JavaScript packages and the spaCy English model. The trained classifier is included in `backend/model/`. Open two terminals in **the folder containing this README**, alongside `backend/` and `frontend/`.
 
-**Terminal 1: back end**
+### Terminal 1 — FastAPI
 
-Git Bash (Windows), macOS or Linux:
-```bash
-cd webapp/backend
-py -3.15 -m venv .venv               # macOS/Linux: python3.15 -m venv .venv
-source .venv/Scripts/activate        # macOS/Linux: source .venv/bin/activate
-python --version                     # must print Python 3.15.x
-pip install -r requirements.txt      # also installs the spaCy English model
-cp .env.example .env
-python -m app                        # API on http://127.0.0.1:8000, docs at /docs
+**Windows PowerShell**
+
+```powershell
+cd backend
+py -3.15 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+.\.venv\Scripts\python.exe -m app
 ```
 
-Windows PowerShell: the same, but activate with `.venv\Scripts\Activate.ps1` and copy with
-`copy .env.example .env`. (If scripts are blocked, run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.)
-
-**Terminal 2: front end**
+**macOS or Linux**
 
 ```bash
-cd webapp/frontend
-npm ci                               # exact versions from package-lock.json
-cp .env.example .env                 # PowerShell: copy .env.example .env
-npm run dev                          # http://localhost:5173
+cd backend
+python3.15 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+test -f .env || cp .env.example .env
+.venv/bin/python -m app
 ```
 
-Open **http://localhost:5173** (use `localhost`, not `127.0.0.1`: CORS allows exactly
-`http://localhost:5173`).
+On Windows with Git Bash, use `py -3.15` to create the environment and `.venv/Scripts/python.exe` in place of `.venv/bin/python` in the remaining commands. The `python -m app` entry point starts Uvicorn with the server header and forwarded-header trust disabled.
 
-Tests: `cd webapp/backend && python -m pytest` (32 tests). Lint: `cd webapp/frontend && npm run lint`.
-Speed check: with the API running, `python scripts/measure_latency.py`.
+### Terminal 2 — React
 
-> Start the API with `python -m app`, not plain `uvicorn`: it turns off two uvicorn defaults we
-> don't want (the `Server` header and trusting client-supplied `X-Forwarded-For`), see section 7B.
+```sh
+cd frontend
+npm ci
+npm run dev
+```
 
-> **If `pip install` starts "Building wheel" or "Preparing metadata" for numpy or spaCy**, the
-> virtual environment is on the wrong Python version. Delete `.venv` and recreate it with
-> `py -3.15 -m venv .venv`.
+`npm ci` installs the versions in `package-lock.json`. The frontend defaults to the local API. To configure another API address, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE_URL`. The backend reads its settings from the environment or `backend/.env`.
 
----
+| Open in a browser | What to expect |
+|---|---|
+| [Inkprint](http://localhost:5173) | Use this exact frontend origin for local development. Choose **AI sample** and **Check text** to run a prediction. |
+| [API health](http://127.0.0.1:8000/api/health) | After startup the response contains `"status": "ok"` and `"model_loaded": true`. |
+| [Interactive API documentation](http://127.0.0.1:8000/docs) | Expand an endpoint and use **Try it out**. The marking configuration uses `SHOW_DOCS=true`. |
 
-## 2. Architecture
+### Tests and build
+
+| Working directory | Command | What it checks |
+|---|---|---|
+| `backend/`, with the project virtual environment active | `python -m pytest` | The 32 test cases cover API responses, input limits, error handling, model behaviour and security controls. |
+| `backend/`, with the environment active and the API running | `python scripts/measure_latency.py --runs 30` | Times the API round trip for 500-word and 1,000-word passages. |
+| `frontend/` | `npm run lint` and `npm run build` | Runs ESLint and builds the production frontend. |
+
+If running without activating the virtual environment, use the same Python executable as in Terminal 1. The backend requirements pin the listed packages, including the scikit-learn version used to save the classifier. The English spaCy pipeline is pinned to a release wheel.
+
+## 2. Architecture and the link to Assignment 2
 
 ```mermaid
-flowchart LR
-  U[Browser] -->|types or opens .txt| FE[React + MUI + D3<br/>localhost:5173]
-  FE -->|POST /api/detect {text}| MW
-  FE -->|GET /api/model-info| MW
-  subgraph API[FastAPI · 127.0.0.1:8000]
-    MW[CORS → security headers → body limit 128 KB → log] --> V[Pydantic validation<br/>20–1,000 words]
-    V --> G[Analysis guard<br/>max 4 at once, else 503]
-    G --> TP[worker thread]
-    TP --> P[normalise → clean → spaCy split]
-    P --> F[15 features per sentence]
-    F --> M[(Logistic Regression<br/>loaded once at start-up)]
-    M --> AGG[sqrt-length pooling + range + explanations]
-  end
-  AGG -->|JSON result| FE
+flowchart TD
+    UI["React form and results"] -->|POST /api/detect| API["FastAPI body and input checks"]
+    API -->|Valid input| Guard["Analysis guard"]
+    Guard -->|Slot available| Prep["Normalise, split and extract 15 features per sentence"]
+    Prep --> Model["Score sentences and pool the passage"]
+    Frozen["A2 model and configuration"] --> Model
+    Model -->|JSON result| UI
+    API -->|Invalid input| Error["JSON error"]
+    Guard -->|Busy| Error
+    Error --> UI
+    About["React About page"] -->|GET /api/model-info| Info["Model information"]
+    Metrics["A2 evaluation files"] --> Info
+    Frozen --> Info
+    Info --> About
 ```
 
-**One request, end to end**
+1. **React sends one passage.** The form validates the input. `detectText` sends a JSON object with the single field `text`.
+2. **FastAPI admits the request.** Middleware checks the body size, Pydantic checks the text and the analysis guard reserves a slot. An admitted analysis runs in a worker thread.
+3. **The A2 model makes the prediction.** FastAPI's startup routine loads the frozen logistic-regression pipeline and the spaCy pipelines once per server process. The app normalises the incoming characters, applies the A2 cleaning and sentence-splitting rules, and builds the same ordered set of nine writing-style features and six part-of-speech features (Honnibal et al. 2020). The scikit-learn classifier returns one probability for each usable sentence (Pedregosa et al. 2011).
+4. **React displays the response.** The backend pools the sentence probabilities, returns the passage verdict and provides the text segments used for highlighting. Selecting a sentence links its chart bar, passage highlight and feature explanation.
 
-1. `TextInputForm` checks the text locally (20–1,000 words) and shows any message beside the field.
-2. `api/client.js` sends `POST /api/detect` with `{"text": "..."}`.
-3. Middleware applies CORS, adds security headers, and rejects bodies over 128 KB with **413**.
-4. `DetectRequest` (Pydantic) rejects bad input with **422**; nothing reaches the model.
-5. The analysis guard returns **503** if 4 analyses are already running; otherwise the work runs in a thread.
-6. `app/ml/detector.py`: normalise invisible and look-alike characters → Assignment 2 cleaning and spaCy
-   splitting → 15 features → sentence probabilities → pooled score → sentence-agreement range → feature pushes.
-7. The page shows the verdict, the shaded passage, two charts and the sentence detail.
+The classifier, frozen configuration and two evaluation CSVs match the A2 exports byte for byte. The model version shown on the About page is `db04079c0d91`, the first 12 characters of its SHA-256 digest. Our earlier parity check on 16 essays and two accented passages produced the same features and document scores as the original A2 code on those inputs. [Frozen model configuration](backend/model/frozen_config.json)
 
-**Same processing as training.** `app/ml/features.py` and the cleaning and splitting in
-`app/ml/text_pipeline.py` are copied from Assignment 2. We checked it on Python 3.15 against the original
-Assignment 2 code: on 16 essays and on 2 passages full of accented names and words (Việt, Hà Nội, résumé,
-Señor Pérez), the app produced **identical feature values** and the same document scores. The only step
-added before the model is the evasion normalisation (section 8), which changes nothing in ordinary text.
+| A2 evaluation set | Document accuracy | What it tells us |
+|---|---:|---|
+| DRCAT held-out essays (Kłeczek n.d.) | **88.84%** | Performance on writing similar to the training essays. [DRCAT evaluation](backend/model/test_metrics_drcat.csv) |
+| External HC3 question answers (Guo et al. 2023) | **60.55%** | Performance drops on a different writing task. [HC3 evaluation](backend/model/test_metrics_hc3.csv) |
 
-**Speed** (`scripts/measure_latency.py`, 30 runs over HTTP on a 2-core machine, exactly 500 words under
-the app's counting rule): median **57 ms**, 95th percentile 70 ms, slowest 111 ms. 1,000 words: median
-105 ms, slowest 124 ms. Assignment 1's target was under 2 s for 500 words. This times the API; the browser
-adds drawing time on top, which you can see is small when you run a check.
+## 3. Where to find the code
 
----
-
-## 3. Project structure
-
-```
-webapp/backend/
-  app/__main__.py          `python -m app`: starts uvicorn with proxy headers OFF
-  app/main.py              app factory: lifespan (model loaded once), middleware, CORS, routes
-  app/config.py            every setting from environment variables / .env
-  app/schemas.py           Pydantic request/response models with limits and /docs examples
-  app/errors.py            ONE error format for every status code
-  app/security.py          analysis guard, body-size limit, security headers
-  app/routers/detect.py    POST /api/detect, GET /api/model-info, GET /api/health
-  app/ml/detector.py       model loading, scoring, pooling, range, explanations
-  app/ml/text_pipeline.py  evasion normalisation + Assignment 2 cleaning and splitting
-  app/ml/features.py       the 15 Assignment 2 features (unchanged)
-  model/                   frozen model, config, Assignment 2 test metrics
-  tests/                   pytest: API behaviour and every defence
-  scripts/attacks/         dos_attack.py, evasion_attack.py
-  scripts/measure_latency.py  500-word speed check
-  scripts/data/samples.json  AI and human samples used by the evasion experiment
-webapp/frontend/
-  src/main.jsx             theme, router, session-history provider
-  src/App.jsx              routes /, /about, * (404), inside an ErrorBoundary
-  src/api/client.js        the only file that calls the back end
-  src/pages/               DetectPage (idle/loading/success/error), AboutPage, NotFoundPage
-  src/components/          form, verdict, highlighted passage, sentence detail, two D3 charts
-```
-
----
-
-## 4. How it meets the brief
-
-| Requirement (spec section) | Where |
+| Component | Location |
 |---|---|
-| Input validated before sending, message beside the field (2.1) | `TextInputForm.jsx`, `lib/text.js`; `DetectPage.runCheck` validates again, so "Try again" can't skip it |
-| Result and confidence most prominent (2.1, 2.5) | `ResultSummary.jsx`: verdict ("Uncertain result" when the range crosses the line), score, sentence-agreement range, sticky beside the input |
-| Loading, success, error states (2.1) | `DetectPage.jsx`, `ErrorPanel` (network, timeout, 413, 503 with countdown, 500) |
-| 404 page and crash fallback (2.1) | `NotFoundPage.jsx`, `ErrorBoundary.jsx` |
-| Two visualisations, different questions, interactive (2.1) | `SentenceChart` (this text: select a bar to find the sentence, ← →) and `HistoryChart` (all checks on this page: filter by verdict, select a dot for its details); both have tooltips and a table view |
-| Consistent design, responsive, accessible (2.1) | `theme.js`, `styles.css`; labels on every input, keyboard access to sentences and chart marks, visible focus, colour-blind-checked palette, scores shown as text as well as colour |
-| More than one input type (A2 brief, innovation) | Paste, or open a `.txt` file (read in the browser, never uploaded) |
-| Pydantic models with constraints (2.2) | `schemas.py` (`min_length`, `max_length`, word-count validator, `extra="forbid"`) |
-| Two HTTP methods, genuine purposes (2.2) | `POST /api/detect` analyses; `GET /api/model-info` feeds the About page; `GET /api/health` |
-| Correct status codes, one JSON error format (2.2) | `errors.py`: 400, 404, 405, 413, 422, 500, 503 all as `{"error": {"code", "message", "fields"}}` |
-| Model loaded once (2.2) | `lifespan` in `main.py` |
-| User input never rendered as HTML (2.3) | All text rendered as React text; chart tooltips are React elements, not `innerHTML` |
-| Size limits enforced on the back end (2.3) | 20–1,000 words (Pydantic); safety nets of 20,000 characters and a 128 KB body |
-| CORS only our front end (2.3) | `FRONTEND_ORIGIN` → exactly one origin; methods GET/POST; header Content-Type; outermost middleware so even a 413 reaches the page |
-| No secrets in code (2.3) | `.env` is git-ignored; `.env.example` documents every setting |
-| Pinned versions (2.4) | `requirements.txt` (`==`), `package.json` (exact) + `package-lock.json` |
+| Form, request and results | [TextInputForm.jsx](frontend/src/components/TextInputForm.jsx), [API client](frontend/src/api/client.js), [DetectPage.jsx](frontend/src/pages/DetectPage.jsx) |
+| Sentence selection and session comparison | [HighlightedPassage.jsx](frontend/src/components/HighlightedPassage.jsx), [SentenceChart.jsx](frontend/src/components/SentenceChart.jsx), [HistoryChart.jsx](frontend/src/components/HistoryChart.jsx) |
+| Startup, settings and validation | [main.py](backend/app/main.py), [config.py](backend/app/config.py), [schemas.py](backend/app/schemas.py) |
+| Endpoints, error responses and security middleware | [detect.py](backend/app/routers/detect.py), [errors.py](backend/app/errors.py), [security.py](backend/app/security.py) |
+| Text preparation, features and model | [text_pipeline.py](backend/app/ml/text_pipeline.py), [features.py](backend/app/ml/features.py), [detector.py](backend/app/ml/detector.py) |
+| Tests and recorded experiment inputs | [API tests](backend/tests/test_api.py), [defence tests](backend/tests/test_defences.py), [evaluation samples](backend/scripts/data/samples.json) |
 
-**What counts as a word.** For the limits, a word is a whitespace-separated piece containing a letter
-or digit, so *résumé*, *work-life*, *don't* and *2024* each count once and a lone dash doesn't. The front
-end (`countWords`) and back end (`count_input_words`) use the same rule. This is separate from the
-model's own `n_words` feature, which keeps its Assignment 2 definition so predictions don't change.
+## 4. Using the detector
 
-**Input limits, and why.** *1,000 words* is the limit agreed in Assignment 1. *At least 20 words*:
-with fewer there are only one or two sentences, so the score rests on a single sentence and the range
-means nothing. *20,000 characters* and a *128 KB body* are safety nets only: English averages about
-6 characters per word including spaces, so 1,000 real words never reach them, but they stop a single
-50,000-letter "word" or a huge body reaching the model.
+- **Input.** Paste **20–1,000 words** of English prose or open a `.txt` file up to **100 KiB**. The browser reads the file locally and sends only its text as JSON. The server separately enforces the word limits, a **20,000-character** limit and a **128 KiB** HTTP-body limit. For validation, a word is a whitespace-separated item containing at least one letter or digit.
+- **Result.** The main result shows a verdict, estimated AI score and sentence-agreement range. The page shows loading, success and error states. An unknown frontend address opens a 404 page, and an error boundary provides a fallback for a rendering failure.
+- **Two chart questions.** The sentence chart answers “Which sentences scored highest in this passage?” Select a bar to examine that sentence. The history chart answers “How do my recent checks compare?” Filter by verdict or select a point for its details. Both charts have tooltips, keyboard controls and a table view (Bostock, Ogievetsky & Heer 2011).
+- **Privacy and display.** React renders each segment as text inside a styled element. The API logs the method, path, status and time. It does not persist submitted passages. The current result stays in page memory. The comparison chart retains up to 30 summaries, with scores and counts, for the current browser session. Reloading clears them.
+- **Local response time.** In the team's 30-run HTTP benchmark on a two-core machine, a 500-word passage took **57 ms median** and **70 ms at the 95th percentile**. The 1,000-word median was **105 ms**. These timings cover the API round trip. [Measurement script](backend/scripts/measure_latency.py)
 
-**Privacy.** Submitted text is not stored or logged anywhere. The API log records method, path,
-status and time only, and validation errors don't echo the input. The comparison chart keeps only
-numbers (score, range, verdict, counts) in the page's memory: no text, no sentence results, nothing in
-browser storage. **Clear** returns the page to its starting state: text, result and the session
-chart's scores all go. Reloading or closing the page does the same.
+## 5. API and interpretation
 
----
+FastAPI generates the live Swagger UI from the application's routes and Pydantic schemas (Ramírez n.d.). [Open the local API documentation](http://127.0.0.1:8000/docs)
 
-## 5. API
+| Method and path | Request | Successful response |
+|---|---|---|
+| `GET /api/health` | No body | Status and whether the model is loaded. After startup, `{"status":"ok","model_loaded":true}`. |
+| `GET /api/model-info` | No body | Model name, version, ordered features, evaluation, threshold, pooling and input limits. For this model the response includes `"threshold": 0.5` and `"pooling": "sqrt_length"`. |
+| `POST /api/detect` | JSON containing `text` | `label`, `score`, `range`, `certainty`, per-sentence scores, highlighted passage segments, writing-style contributions and normalisation counts. |
 
-Full schema with examples: **http://127.0.0.1:8000/docs**
+**Example request for `POST /api/detect`**
 
-| Method | Path | Purpose | Success | Errors |
-|---|---|---|---|---|
-| POST | `/api/detect` | Score a passage | 200 `DetectResponse` | 400, 413, 422, 503, 500 |
-| GET | `/api/model-info` | Model, features, test metrics, limits | 200 | 503, 500 |
-| GET | `/api/health` | Liveness | 200 | none |
+```json
+{
+  "text": "Remote work has fundamentally transformed the modern workplace, offering both significant opportunities and notable challenges. Furthermore, employees now enjoy greater flexibility, which can lead to improved work-life balance. However, the absence of in-person interaction may weaken team cohesion."
+}
+```
 
-`DetectResponse` contains `label`, `band`, `score`, `range {low, high}`, `certainty`,
-`sentences[]` (score, band, top features each way), `passage[]` (segments for highlighting),
-`style_summary[]` and `normalisation` (hidden characters removed).
+To trace the result, submit this passage from the frontend, open the request in the browser's Network tab and compare `score` with the percentage on screen. Select a sentence and compare its bar with the matching entry in `sentences`.
 
-**How the numbers are made**
-- *Sentence score*: the Logistic Regression probability for that sentence.
-- *Document score*: sentence scores averaged with weights √(words): Assignment 2's `sqrt_length` pooling.
-- *Sentence-agreement range*: score ± 1.96·√((variance + 0.01) / n), the team's formula from
-  `transformer/train_transformer.py`, using the weighted variance and Kish's effective n. It widens
-  for short texts or when sentences disagree. **It is a heuristic, not a validated 95% confidence
-  interval**: sentences from one document are not independent, and we have not measured how often
-  the true label falls inside it. When it crosses the 0.5 line the interface says "Uncertain result".
-- *Bands*: Human ≤ 25%, Possibly AI ≤ 50%, Likely AI ≤ 75%, Very likely AI above (team mockup).
-- *Feature pushes*: each feature's contribution to a sentence's **log-odds** (standardised value ×
-  coefficient), as in Assignment 2's error analysis. They are not percentage points, and the document-level
-  list averages them, so it shows associations rather than an exact breakdown of the document percentage.
-- *Sentence labels*: the model was trained with every sentence inheriting its essay's label
-  (`label_origin: document_inherited`), so a sentence score is an estimate of how AI-like its style
-  is, not a verified label for that sentence. The About page says so.
+The screenshot at the top shows a different, 341-word passage. Its displayed score is **57%**, with a sentence-agreement range of **43–72%**. Because that range crosses the 50% decision boundary, the headline reads **Uncertain result**. These are the rounded values visible to the user.
 
----
+**Example validation response.** Submitting `{"text":"one two three"}` returns HTTP `422`.
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Text has 3 words; at least 20 are needed for a meaningful score.",
+    "fields": [
+      {
+        "field": "text",
+        "message": "Text has 3 words; at least 20 are needed for a meaningful score."
+      }
+    ]
+  }
+}
+```
+
+Other API outcomes include `400` for malformed JSON, `404` for an unknown route, `405` for the wrong method, `413` for an oversized body, `503` when all analysis slots are occupied or the model is unavailable, and a generic `500` for an unexpected failure. A busy response includes `Retry-After: 2`. Application errors use the JSON structure above. The CORS middleware handles browser preflight responses separately.
+
+**How to read a score.** Each sentence receives an estimated AI probability. For the passage, each sentence's weight is the square root of its word count. Longer sentences therefore have more influence, with a smaller increase in weight for each additional word. A pooled score at or above **0.5** maps to the AI label. The sentence-agreement range widens when sentences disagree or when there are few effective observations. Its calculation uses weighted variance and effective sample size (Kish 1965). Its coverage as a statistical confidence interval has not been validated. A range spanning the decision boundary produces an **Uncertain result**.
+
+Each sentence inherited its training label from its essay. The feature explanation shows how strongly an individual feature pushed a sentence's log-odds towards AI or human writing. This explains the model's behaviour on a sentence without establishing who wrote it.
 
 ## 6. Threat model
 
-**Who would attack it?** Mainly students or writers who used AI and want their text to pass as
-human-written, and people tuning AI output to beat detectors in general. A smaller group
-just wants to knock the service over, or abuse it as free computing.
+A writer may want an AI-generated passage to receive a human verdict. Someone probing the service can repeatedly edit and resubmit text to learn which features affect the score. A third user may want to keep the detector busy so other people cannot use it. All three can call the API directly, choose the text and headers they send, and issue concurrent requests. Browser validation alone cannot enforce server limits. These capabilities guided the scope of our defences (Dong 2026a, 2026b).
 
-**What do they want?**
-1. A "human" verdict for AI-written text (the main goal, named in the spec for this topic).
-2. To learn how the detector decides, by submitting edits over and over until one passes.
-3. To make the service unusable for others.
+| Risk in this app | Why it matters or where the boundary lies |
+|---|---|
+| Denial of service | Text cleaning, spaCy analysis and model inference consume CPU. A small input or a burst can delay other users. Nominated in §7A. |
+| Misconfiguration and vulnerable dependencies | The application depends on Python and JavaScript packages and serves responses from two local origins. Nominated in §7B. |
+| Detection evasion | Unicode edits can change model features in text that looks similar to a reader. Nominated in §8. |
+| Repeated probing and model loading | The concurrency cap limits simultaneous work. It does not impose a per-user rate limit. Startup trusts the bundled local model. Its displayed hash identifies the artefact and is not an integrity check against a trusted digest. |
+| Other risks in the brief | The service has no database, accounts or stored user records. The API accepts JSON text, does not save client-supplied filenames, does not run shell commands from text and does not fetch URLs supplied by users. |
 
-**What can they actually do?** They don't need our interface: anyone can send HTTP requests
-with curl or a script, with any body, any headers and as many requests as they like. They can
-send any Unicode the browser can paste. They cannot reach the server's files or a database
-(there isn't one).
+## 7. Nominated security defences — assignment §2.7
 
-**Risks from spec section 2.7 that apply to this design**
+We nominate **denial of service (Advanced)** and **misconfiguration and vulnerable dependencies (Intermediate)**.
 
-| Risk | Applies? | Why |
-|---|---|---|
-| Denial of service | **Yes: nominated (7A)** | Each analysis runs spaCy and the model, far more costly than sending a request. We also found Assignment 2's HTML regex backtracks catastrophically. |
-| Misconfiguration / vulnerable dependencies | **Yes: nominated (7B)** | Applies to every application; we had real findings. |
-| Missing rate limiting | Yes, not nominated | Goal 2 above (repeated probing). Only two defences are marked; the concurrency cap and input limits already bound the cost of a flood, so we chose the defences with the most measurable risk. |
-| Unsafe model loading | Low | The model is our own file, committed to our repo and loaded from disk; it is never downloaded or uploaded by users. |
-| Detection evasion (2.8) | **Yes** | Goal 1: hidden and look-alike characters change what the model sees. |
-| SQL injection | No | No database. |
-| Unsafe file upload | No | `.txt` files are read in the browser and sent as plain JSON text; the server accepts no files. |
-| Command injection | No | The back end never runs system commands. |
-| SSRF | No | The back end makes no outbound requests from user input. |
-| Broken access control | No | No accounts and no stored records to reach. |
+### 7A. Denial of service
 
----
+The A2 HTML-cleaning expression could spend several seconds backtracking on a small input. Running that work on the API event loop delayed unrelated requests. We changed the cleaner to a linear expression, moved inference to a worker thread and limited concurrent analyses to four per server process. Excess requests receive `503` immediately. The regression tests compare the two cleaners' output on a fixed sample of 20,000 generated strings (Weidman n.d.). [Cleaning code](backend/app/ml/text_pipeline.py) · [Analysis guard and route](backend/app/routers/detect.py) · [Defence tests](backend/tests/test_defences.py)
 
-## 7. Security defences (section 2.7)
+| Team measurement on localhost | Defence off | Defence on |
+|---|---:|---:|
+| Longest wait for an unrelated health request during one expensive analysis, original benchmark | 4,828 ms | 4 ms |
+| Same measurement in a second team run | 8,467 ms | 20 ms |
+| Outcomes for 30 concurrent analyses in the second run | 30 completed with `200` | 4 completed with `200` and 26 received `503` |
 
-**The two defences nominated for marking:**
+Both timing rows describe the longest wait within their own run. The trade-off is that legitimate users can also receive a busy response during a burst. The frontend offers a retry after the wait. The included comparison uses the local service and the same workload for both settings. [Local comparison script](backend/scripts/attacks/dos_attack.py)
 
-| | Defence | Level | Why our threat model needs it |
-|---|---|---|---|
-| **A** | Denial of service | Advanced | Goal 3: a cheap request can cost us a lot of CPU, and we found one that costs minutes |
-| **B** | Misconfiguration and vulnerable dependencies | Intermediate | Every attacker benefits from known library flaws and loose defaults; we found real ones |
+The local demonstration uses `DOS_GUARD_ENABLED` in `backend/.env`. The default is `true`. Restart the backend after changing the setting so each run uses the intended configuration.
 
-The denial-of-service defence can be switched off in `.env` (`DOS_GUARD_ENABLED=false`) so the video can
-show the attack working without it and failing with it. Restart the API after changing `.env`, and set
-it back to `true` afterwards.
+### 7B. Misconfiguration and vulnerable dependencies
 
-### A. Denial of service (Advanced)
+| Recorded finding | Change in this version |
+|---|---|
+| The team's frontend audit flagged older Axios, React Router and Vite versions. | Axios `1.13.1 → 1.21.0`, React Router DOM `7.9.5 → 7.18.5` and Vite `7.1.12 → 7.3.7`. [Frontend manifest](frontend/package.json) · [Lockfile](frontend/package-lock.json) |
+| The Python audit flagged older Starlette and pytest versions. | Starlette `0.49.3 → 1.10.0` and pytest `8.4.2 → 9.2.0`. FastAPI is pinned at `0.162.0`. [Backend requirements](backend/requirements.txt) |
+| The server advertised its software and accepted forwarded headers under the previous launch settings. | The project entry point disables both behaviours. [Server entry point](backend/app/__main__.py) |
+| API responses needed browser security headers and cache controls. | The middleware adds `nosniff`, frame restrictions, a referrer policy and a permissions policy. API routes also receive a restrictive content security policy and `Cache-Control: no-store`. These settings apply to responses served by FastAPI. [Security middleware](backend/app/security.py) |
+| Browser access and documentation exposure needed explicit settings. | CORS allows the configured frontend origin and covers early body-limit responses. `SHOW_DOCS` controls the live API documentation and schema. Local credentials belong in backend environment settings. `VITE_` variables are visible to the browser. [Application setup](backend/app/main.py) · [Example settings](backend/.env.example) |
 
-**The attack we found.** Assignment 2's `clean_text()` strips HTML with
-`(?:\s+[^<>]*?)?\s*/?>`. Whitespace can be split between three parts in every possible way,
-so text like `<p` followed by many form feeds (which survive the earlier whitespace collapse)
-makes the regex engine try them all: cubic time. We measured **1,500 characters ≈ 6 s,
-2,000 ≈ 15 s, 4,000 ≈ 118 s**. A 12,000-character request (inside every size limit) would hold
-a CPU for most of an hour.
+**Dependency audit evidence.** The team's recorded follow-up reported zero known findings for the packages checked by `npm audit` in `frontend/` and `pip-audit -r requirements.txt` in `backend/`. The English spaCy model was outside the Python audit's coverage and is pinned to an exact release URL. The successful terminal exports and tested revision have not been supplied with this version. The earlier `ENOLOCK` screenshot records an invocation from the wrong directory.
 
-**The defence, in three layers** (`routers/detect.py`, `security.py`, `text_pipeline.py`):
-1. **Fix the cause**: an equivalent linear regex `(?:/|\s[^<>]*)?>`. It accepts exactly the same
-   tags, so cleaning output is unchanged: identical on 200,000 random strings, and a test checks 20,000 every run.
-2. **Keep the server responsive**: analysis runs in a worker thread, not on the event loop.
-3. **Cap the work**: at most `MAX_CONCURRENT_ANALYSES` (4) at once. Extra requests get an
-   immediate **503** with `Retry-After`, instead of queueing up a backlog.
+**OWASP ZAP evidence.** The recorded backend attempt started at `http://127.0.0.1:8000/` and received `404`. The API provides a health check at `/api/health`. The team reported reaching the frontend on port 5173. The exported alert list, backend route coverage and retests are pending. Russel will record the tested revision and date, affected URL, alert and risk, fix or justification, and retest outcome here. ZAP associates a finding with the request that triggered it (ZAP Dev Team n.d.).
 
-**Evidence: a controlled comparison.** Same machine, same command
-(`python scripts/attacks/dos_attack.py --size 1500 --flood 30`), only `DOS_GUARD_ENABLED` changed:
+**Cost.** Package upgrades require compatibility checks. Restrictive frame headers prevent embedding the API in another site. The frontend and API serve different responses, so each origin needs its own scan evidence.
 
-| | Defence OFF | Defence ON |
-|---|---|---|
-| One expensive request (1.8 KB) | other users waited up to **4,828 ms**; the attack took 5.1 s | other users waited at most **4 ms**; the attack took under 0.1 s |
-| Flood of 30 analyses at once | all 30 queued; health check 250 ms | 4 served, **26 rejected with 503**; health check 60 ms |
+## 8. Advanced security — detection evasion, assignment §2.8
 
-Optional variation, defence ON only: `--size 11000` is also handled in about 0.1 s. Don't run it with the
-defence OFF: that request would freeze the server for most of an hour.
+Our selected model attack is **detection evasion**. Invisible or look-alike characters can change the word boundaries and writing-style features seen by the A2 classifier while leaving a passage visually similar. The backend performs targeted Unicode normalisation before the original feature extraction and reports how many characters it changed. The mapping covers selected cross-script look-alikes described by the Unicode Consortium (Davis & Suignard 2023). [Normalisation code](backend/app/ml/text_pipeline.py) · [Evaluation script](backend/scripts/attacks/evasion_attack.py)
 
-**Cost.** Under a burst some real users get "busy, try again" (503) rather than waiting. The
-front end shows a retry button. Four slots suits a 4-core laptop; raise it on bigger machines.
+All **10 original AI passages** scored at or above 0.5 before any edit. A successful evasion moved one of those passages below 0.5. Deterministic variants ran once per passage. Random variants used five seeds per passage, giving 50 variants from the same 10 sources. The team's experiment record reports matching results in-process and through the local `POST /api/detect` endpoint. For the HTTP comparison the team changed `EVASION_DEFENCE_ENABLED`, restarted the API and used the same samples each time.
 
-### B. Misconfiguration and vulnerable dependencies (Intermediate)
+| Edit | Variants | Success with defence off | Success with defence on | Mean AI score off → on |
+|---|---:|---:|---:|---:|
+| Unedited AI passages | 10 | — | — | 0.905 → 0.905 |
+| Zero-width spaces | 10 | 100% | 0% | 0.314 → 0.905 |
+| 10% look-alike substitutions | 50 | 0% | 0% | 0.774 → 0.905 |
+| 30% look-alike substitutions | 50 | 60% | 0% | 0.486 → 0.905 |
+| 100% look-alike substitutions | 10 | 100% | 0% | 0.069 → 0.905 |
+| Combining marks | 10 | 100% | 0% | 0.187 → 0.905 |
+| Mixed invisible and look-alike edits | 50 | 100% | 0% | 0.171 → 0.905 |
+| Visible edits to punctuation and transition words | 10 | 0% | 0% | 0.777 → 0.777 |
 
-What we found and fixed:
-
-| Finding | Tool | Fix |
-|---|---|---|
-| axios 1.13.1: SSRF, prototype-pollution and DoS advisories | `npm audit` (high) | upgraded to 1.21.0 |
-| react-router-dom 7.9.5, vite 7.1.12 | `npm audit` (high) | upgraded to 7.18.5 and 7.3.7 |
-| starlette 0.49.3: PYSEC-2026-2280/2281 | `pip-audit` | upgraded to 1.10.0 (FastAPI 0.162.0) |
-| pytest 8.4.2: PYSEC-2026-1845 | `pip-audit` | upgraded to 9.2.0 |
-| Uvicorn trusts `X-Forwarded-For` from localhost by default, so a local client can fake its address | review + our own test | `python -m app` runs with `proxy_headers=False` |
-| No security headers by default | review | `SecurityHeadersMiddleware`: nosniff, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; API also gets `CSP: default-src 'none'` and `Cache-Control: no-store` |
-| Server header reveals the software | review | `server_header=False` |
-| Interactive docs always on | review | `SHOW_DOCS=false` turns off `/docs` and `/openapi.json` in production |
-| CORS was applied after the body-size check, so a 413 reached the browser without a CORS header and showed as a network error | our own test | CORS is now the outermost middleware |
-| Content Security Policy (CSP) Header Not Set | OWASP ZAP | No changes. Alert raised from port 5173 which is dev only, the backend sets this header |
-| Missing Anti-clickjacking Header | OWASP ZAP | No changes. Alert raised from port 5173 which is dev only, the backend sets this header |
-| X-Content-Type-Options Header Missing | OWASP ZAP | No changes. Alert raised from port 5173 which is dev only, the backend sets this header |
-| Information Disclosure - Suspicious Comments | OWASP ZAP | No changes. Marked comments are documentation from third-party libraries |
-| Timestamp Disclosure - Unix | OWASP ZAP | No changes. It was a false positive and the timestamp it marked was a necessary hash, not a timestamp |
-| Path Traversal | OWASP ZAP | No changes. Only .txt files are allowed which are read into the browser as plain text |
-
-Both `npm audit` and `pip-audit -r requirements.txt` report **0 known vulnerabilities** (checked on
-Python 3.15). `en_core_web_sm` is not on PyPI, so pip-audit cannot check it; it is pinned to an exact
-release URL.
-
-**Cost.** Pinned, audited versions must be re-audited and upgraded deliberately; the stricter headers mean
-the API can't be embedded in other sites (which we don't need).
-
----
-
-## 8. Advanced security (section 2.8): detection evasion
-
-**Attack.** Change how AI text is *encoded* without changing how it *looks*. The features count
-only ASCII letters (`[A-Za-z']+`), so a zero-width space or a Cyrillic "а" splits words in two.
-That lowers *Long words*, the strongest AI-direction feature, and the score falls toward human.
-
-**Defence.** `normalise_for_evasion()` runs on the text exactly as received, before the Assignment 2
-cleaning. It removes invisible format characters (Unicode category Cf, variation selectors, Hangul fillers),
-maps cross-script look-alikes (Unicode TR39 confusables for Cyrillic, Greek and IPA) to Latin, and removes
-a separate combining accent typed straight after a plain a–z letter. Genuine accented letters (café,
-résumé, Việt) are single characters, so they pass through untouched and the model sees exactly what
-Assignment 2 would have produced. The interface reports anything removed in neutral terms, because such
-characters can also come from copying text out of some apps.
-
-**Measured** with `python scripts/attacks/evasion_attack.py` on **10 AI-written passages** (all 10 score
-≥ 0.5 before any attack). Random attacks were drawn 5 times per passage with different seeds (50 variants);
-deterministic attacks give the same text every time, so they were run once per passage (10 variants).
-*Success* = scored ≥ 0.5 before the attack and < 0.5 after it. We ran it twice: in-process, and through the
-real `POST /api/detect` endpoint with `EVASION_DEFENCE_ENABLED` false and then true (`--api`). Both gave
-the same numbers:
-
-| Attack | Variants | Defence OFF: success | mean score | Defence ON: success | mean score |
-|---|---|---|---|---|---|
-| none | | | 0.905 | | 0.905 |
-| zero-width spaces in long words | 10 | **100%** | 0.314 | **0%** | 0.905 |
-| 10% look-alike letters (random) | 50 | 0% | 0.774 | 0% | 0.905 |
-| 30% look-alike letters (random) | 50 | **60%** | 0.486 | **0%** | 0.905 |
-| 100% look-alike letters | 10 | **100%** | 0.069 | **0%** | 0.905 |
-| combining accent every 4th letter | 10 | **100%** | 0.187 | **0%** | 0.905 |
-| zero-width + 50% look-alikes (random) | 50 | **100%** | 0.171 | **0%** | 0.905 |
-| visible edits (drop commas and transition words) | 10 | 0% | 0.777 | 0% | 0.777 |
-
-**Interpretation.** For encoding tricks the defence works completely: every attacked text gets
-the same score as the original, because normalisation restores the exact characters. It does
-**nothing** against real rewriting. Deleting commas and transition words lowered the mean score
-from 0.905 to 0.777 with or without the defence. Paraphrasing tools are a stronger version of the
-same attack, and only a better model can resist them.
-
-**Cost**, measured on ordinary text (score with the defence on minus off): 10 AI passages, 6 student
-essays and 2 passages full of accented names and words all changed by **0.0000**. A passage containing
-genuine Greek and Cyrillic words changed by 0.023, because those letters are transliterated. Normalising
-700 words takes about 1.1 ms (a full analysis is about 10 ms). A genuine accent typed as a separate
-combining character (rare: keyboards produce "é" as one character) is removed and reported.
-
-**Limits of the evidence.** 10 source passages is small, and they were written by an AI assistant for
-this test; the human samples are DRCAT essays. A larger run should use AI essays from the DRCAT test set.
-
----
+**Cost and limits.** On the team's controls, the largest score change was 0.0000 across 10 unedited AI passages, six human essays and two passages containing precomposed accented characters. A passage containing genuine Greek and Cyrillic text changed by **0.0232**. A separately encoded accent can also be removed. The teammate's timing run measured **1.73 ms for normalisation on 692 words**. Visible rewriting still affected scores with the defence enabled. These results cover the listed variants and ten original AI passages. [Sample provenance](backend/scripts/data/samples.json)
 
 ## 9. Known limitations
 
-- Trained on student essays (DRCAT). On HC3 question answers accuracy falls to about 61% (see the
-  About page). The interface says it is weaker outside student essays.
-- A score is an estimate, never proof. The footer and About page say so.
-- The analysis guard counts in memory: one server process only. Several workers would need a shared
-  store such as Redis.
-- There is no rate limiting (not one of our two nominated defences), so one client can keep the
-  detector busy within the concurrency cap.
-- Only English is supported.
-- Built and tested for Python 3.15 only.
-
----
+- The classifier was trained on English essays. The external HC3 results in §2 show how much accuracy can fall on another genre. Per-sentence scores also inherit the limitations of essay-level training labels.
+- Each server process maintains its own concurrency counter. A multi-process deployment would need coordinated limits. One client can repeatedly occupy available slots.
+- The current frontend can retain a selected history detail after its point is filtered out. After returning from About, **Clear** can be disabled while session summaries remain. A server validation message can persist during an edit.
+- The OpenAPI page exposes the response schemas. Realistic endpoint-specific success examples and an explicit `400` entry for malformed detection JSON would improve the live documentation. A separate HTTP-layer check observed a generic `500` without the allowed-origin header. The browser-visible error for that path still needs verification on the pinned stack.
 
 ## 10. References
 
-- Bostock, M, Ogievetsky, V & Heer, J 2011, 'D³: data-driven documents', *IEEE Transactions on Visualization and Computer Graphics*, vol. 17, no. 12, pp. 2301–2309.
-- Davis, M & Suignard, M 2023, *Unicode Technical Standard #39: Unicode security mechanisms*, Unicode Consortium, viewed 7 November 2026, <https://www.unicode.org/reports/tr39/>.
-- Guo, B, Zhang, X, Wang, Z, Jiang, M, Nie, J, Ding, Y, Yue, J & Wu, Y 2023, 'How close is ChatGPT to human experts? Comparison corpus, evaluation, and detection', *arXiv preprint* arXiv:2301.07597.
-- Honnibal, M, Montani, I, Van Landeghem, S & Boyd, A 2020, *spaCy: industrial-strength natural language processing in Python*, Zenodo, doi:10.5281/zenodo.1212303.
-- Kish, L 1965, *Survey sampling*, John Wiley & Sons, New York.
-- OWASP Foundation n.d., *Regular expression denial of service (ReDoS)*, viewed 7 November 2026, <https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS>.
-- Pedregosa, F et al. 2011, 'Scikit-learn: machine learning in Python', *Journal of Machine Learning Research*, vol. 12, pp. 2825–2830.
-- Ramírez, S n.d., *FastAPI*, viewed 7 November 2026, <https://fastapi.tiangolo.com/>.
-- DAIGT V2 Train Dataset (DRCAT) n.d., Kaggle, viewed 7 November 2026, <https://www.kaggle.com/datasets/thedrcat/daigt-v2-train-dataset>.
+Bostock, M, Ogievetsky, V & Heer, J 2011, ‘D³: data-driven documents’, *IEEE Transactions on Visualization and Computer Graphics*, vol. 17, no. 12, pp. 2301–2309. [doi:10.1109/TVCG.2011.185](https://doi.org/10.1109/TVCG.2011.185)
 
-*(Check these against your unit's Harvard style guide and add the course materials you used.)*
+Davis, M & Suignard, M (eds) 2023, *Unicode security mechanisms*, Unicode Technical Standard #39, rev. 28, Unicode Consortium, viewed 11 November 2026. [Version 15.1.0](https://www.unicode.org/reports/tr39/tr39-28.html)
 
----
+Dong, R 2026a, ‘The back end, and how it gets attacked’, *COS30049 Computing Technology Innovation Project*, Week 10 lecture slides, Swinburne University of Technology, Semester 2.
+
+Dong, R 2026b, ‘When the model itself leaks’, *COS30049 Computing Technology Innovation Project*, Week 11 lecture slides, Swinburne University of Technology, Semester 2.
+
+Guo, B, Zhang, X, Wang, Z, Jiang, M, Nie, J, Ding, Y, Yue, J & Wu, Y 2023, ‘How close is ChatGPT to human experts? Comparison corpus, evaluation, and detection’, *arXiv*, 2301.07597. [arXiv](https://arxiv.org/abs/2301.07597)
+
+Honnibal, M, Montani, I, Van Landeghem, S & Boyd, A 2020, *spaCy: industrial-strength natural language processing in Python*, software, Zenodo. [doi:10.5281/zenodo.1212303](https://doi.org/10.5281/zenodo.1212303)
+
+Kish, L 1965, *Survey sampling*, John Wiley & Sons, New York.
+
+Kłeczek, D n.d., *DAIGT V2 train dataset*, dataset, Kaggle, viewed 11 November 2026. [Dataset](https://www.kaggle.com/datasets/thedrcat/daigt-v2-train-dataset)
+
+Pedregosa, F, Varoquaux, G, Gramfort, A, Michel, V, Thirion, B, Grisel, O, Blondel, M, Prettenhofer, P, Weiss, R, Dubourg, V, Vanderplas, J, Passos, A, Cournapeau, D, Brucher, M, Perrot, M & Duchesnay, É 2011, ‘Scikit-learn: machine learning in Python’, *Journal of Machine Learning Research*, vol. 12, pp. 2825–2830. [Journal article](https://jmlr.org/papers/v12/pedregosa11a.html)
+
+Ramírez, S n.d., *First steps*, FastAPI documentation, viewed 11 November 2026. [FastAPI](https://fastapi.tiangolo.com/tutorial/first-steps/)
+
+Weidman, A n.d., *Regular expression denial of service – ReDoS*, OWASP Foundation, viewed 11 November 2026. [OWASP](https://community.owasp.org/attacks/Regular_expression_Denial_of_Service_-_ReDoS)
+
+ZAP Dev Team n.d., *Alerts*, ZAP desktop user guide, viewed 11 November 2026. [ZAP documentation](https://www.zaproxy.org/docs/desktop/start/features/alerts/)
 
 ## 11. Generative AI statement
 
-**To be completed by the team.** This web application, its tests and the attack scripts were
-drafted with the help of an AI assistant (Claude, Anthropic), working from our Assignment 2 code,
-the Assignment 3 specification and the unit's materials. Describe in your own words what you
-asked for, what you reviewed and changed, and how you checked it. Every member must be able to
-explain every part of the code in the video.
+We used Anthropic's Claude to help draft the web application, tests and security evaluation scripts using our Assignment 2 code, the Assignment 3 brief and the unit materials. The human control passages came from the labelled DRCAT dataset. The benchmark file records the origin of each group of samples.
+
+The project uses our frozen A2 classifier and its evaluation files. Our documented checks include comparing features and predictions against A2 on 16 essays and two accented passages, and comparing local defence-off and defence-on runs under the same conditions. The scripts and tests linked above show how those behaviours are checked.
+
