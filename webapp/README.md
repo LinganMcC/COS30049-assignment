@@ -216,7 +216,7 @@ The local demonstration uses `DOS_GUARD_ENABLED` in `backend/.env`. The default 
 
 **Dependency audit evidence.** The team's recorded follow-up reported zero known findings for the packages checked by `npm audit` in `frontend/` and `pip-audit -r requirements.txt` in `backend/`. The English spaCy model was outside the Python audit's coverage and is pinned to an exact release URL. The successful terminal exports and tested revision have not been supplied with this version. The earlier `ENOLOCK` screenshot records an invocation from the wrong directory.
 
-**OWASP ZAP evidence.** The recorded backend attempt started at `http://127.0.0.1:8000/` and received `404`. The API provides a health check at `/api/health`. The team reported reaching the frontend on port 5173. The exported alert list, backend route coverage and retests are pending. Russel will record the tested revision and date, affected URL, alert and risk, fix or justification, and retest outcome here. ZAP associates a finding with the request that triggered it (ZAP Dev Team n.d.).
+**OWASP ZAP evidence.** The recorded backend attempt started at `http://127.0.0.1:8000/` and received `404`. The API provides a health check at `/api/health`. The team reported reaching the frontend on port 5173. [ZAP Report](ZAP Reports\2026-11-11-ZAP-Report-.html)
 
 **Cost.** Package upgrades require compatibility checks. Restrictive frame headers prevent embedding the API in another site. The frontend and API serve different responses, so each origin needs its own scan evidence.
 
