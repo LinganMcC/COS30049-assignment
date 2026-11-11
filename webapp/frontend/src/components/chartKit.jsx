@@ -3,7 +3,8 @@
 /** Tooltip positioned inside the chart frame. Content is React text, never HTML. */
 export function Tooltip({ tip, width }) {
   if (!tip) return null
-  const left = Math.min(Math.max(tip.x, 90), width - 90)
+  // Half of .chart-tip's max-width (280px), so even the widest tooltip stays inside the chart.
+   const left = Math.min(Math.max(tip.x, 140), width - 140)
   return (
     <div className="chart-tip" style={{ left, top: tip.y }} role="status">
       <strong>{tip.title}</strong>

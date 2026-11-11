@@ -6,7 +6,7 @@ import { TableToggle, Tooltip } from './chartKit.jsx'
 import useWidth from '../lib/useWidth.js'
 
 const HEIGHT = 220
-const M = { top: 16, right: 12, bottom: 34, left: 44 }
+const M = { top: 16, right: 60, bottom: 34, left: 44 }
 
 /**
  * Question answered: which sentences pull this text toward AI, and how hard?
@@ -68,7 +68,11 @@ export default function SentenceChart({ sentences, threshold, selected, onSelect
                 <text x={-8} dy="0.32em" textAnchor="end" className="tick">{tickPct(t)}</text>
               </g>
             ))}
-            <text x={innerW} y={y(threshold) - 6} textAnchor="end" className="tick tick--strong">decision line</text>
+            {/* In the right margin, outside the plot, so no bar can sit under it. */}
+            <text x={innerW + 6} y={y(threshold)} className="tick tick--strong">
+              <tspan dy="-0.25em">decision</tspan>
+              <tspan x={innerW + 6} dy="1.1em">line</tspan>
+            </text>
             {sentences.map((s) => {
               const up = s.score >= threshold
               const top = up ? y(s.score) : y(threshold)
